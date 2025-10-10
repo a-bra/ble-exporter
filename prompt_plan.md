@@ -104,7 +104,7 @@ TDD: Add a placeholder test in `tests/test_sanity.py` that always passes to keep
 OUTPUT: Modified files only (no commentary).
 ```
 
-### Prompt 2 – Config Loader + Tests
+### Prompt 2 – Config Loader + Tests ✅ COMPLETED
 
 ```text
 Context: Project scaffold exists. Implement milestone 2-1 and 2-2.
