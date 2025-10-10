@@ -1,7 +1,7 @@
 # ABOUTME: File-only logging setup for BLE exporter application
-# ABOUTME: Configures RotatingFileHandler with structured log format
+# ABOUTME: Configures TimedRotatingFileHandler with daily rotation and structured log format
 import logging
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 from ble_exporter.config import AppConfig
@@ -29,11 +29,12 @@ def get_logger(app_config: AppConfig) -> logging.Logger:
     log_path = Path(app_config.log_file)
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Create rotating file handler (10MB max, keep 5 backups)
-    handler = RotatingFileHandler(
+    # Create rotating file handler (daily at midnight, keep 30 days)
+    handler = TimedRotatingFileHandler(
         app_config.log_file,
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5
+        when='midnight',
+        interval=1,
+        backupCount=30
     )
 
     # Use structured format
