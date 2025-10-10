@@ -229,7 +229,7 @@ TESTS:
 No metrics yet.
 ```
 
-### Prompt 8 – /metrics Endpoint Integration
+### Prompt 8 – /metrics Endpoint Integration ✅ COMPLETED
 
 ```text
 TASK: Extend exporter with Prometheus endpoint (milestone 8-1 & 8-2).
