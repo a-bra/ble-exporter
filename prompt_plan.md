@@ -126,7 +126,7 @@ Keep existing tests passing.
 OUTPUT: Code + tests only.
 ```
 
-### Prompt 3 – Structured Logger
+### Prompt 3 – Structured Logger ✅ COMPLETED
 
 ```text
 TASK: Implement milestone 3-1 and 3-2.
