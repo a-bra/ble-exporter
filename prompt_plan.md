@@ -147,7 +147,7 @@ Remember to import `AppConfig` from `config.py`.
 Ensure all previous tests still pass.
 ```
 
-### Prompt 4 – Packet Parser
+### Prompt 4 – Packet Parser ✅ COMPLETED
 
 ```text
 TASK: Implement BTHome parser (milestone 4-1 & 4-2).
