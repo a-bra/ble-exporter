@@ -189,7 +189,7 @@ TESTS:
 No BLE calls yet.
 ```
 
-### Prompt 6 – Prometheus Metrics Module
+### Prompt 6 – Prometheus Metrics Module ✅ COMPLETED
 
 ```text
 TASK: Add metrics registry (milestone 6-1 & 6-2).
