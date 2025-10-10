@@ -212,7 +212,7 @@ TESTS:
 All earlier tests stay green.
 ```
 
-### Prompt 7 – HTTP Server Skeleton
+### Prompt 7 – HTTP Server Skeleton ✅ COMPLETED
 
 ```text
 TASK: Implement aiohttp server (milestone 7-1 & 7-2).
