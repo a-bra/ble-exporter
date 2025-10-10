@@ -1,6 +1,7 @@
 # ABOUTME: Unit tests for BTHome packet parser
 # ABOUTME: Tests temperature, humidity, battery decoding and error handling
 import pytest
+from pytest import approx
 
 from ble_exporter.parser import parse_bthome
 
@@ -18,9 +19,9 @@ def test_parse_complete_packet():
     assert 'temperature' in result
     assert 'humidity' in result
     assert 'battery' in result
-    assert abs(result['temperature'] - 21.5) < 0.01
-    assert abs(result['humidity'] - 65.4) < 0.01
-    assert abs(result['battery'] - 85.0) < 0.01
+    assert result['temperature'] == approx(21.5, abs=0.01)
+    assert result['humidity'] == approx(65.4, abs=0.01)
+    assert result['battery'] == approx(85.0, abs=0.01)
 
 
 def test_parse_negative_temperature():
@@ -44,7 +45,7 @@ def test_parse_negative_temperature():
     result = parse_bthome(packet)
 
     assert 'temperature' in result
-    assert abs(result['temperature'] - (-10.5)) < 0.01
+    assert result['temperature'] == approx(-10.5, abs=0.01)
 
 
 def test_parse_temperature_only():
@@ -56,7 +57,7 @@ def test_parse_temperature_only():
     result = parse_bthome(packet)
 
     assert 'temperature' in result
-    assert abs(result['temperature'] - 25.6) < 0.01
+    assert result['temperature'] == approx(25.6, abs=0.01)
     assert 'humidity' not in result
     assert 'battery' not in result
 
@@ -70,7 +71,7 @@ def test_parse_humidity_only():
     result = parse_bthome(packet)
 
     assert 'humidity' in result
-    assert abs(result['humidity'] - 25.0) < 0.01
+    assert result['humidity'] == approx(25.0, abs=0.01)
     assert 'temperature' not in result
     assert 'battery' not in result
 
@@ -84,7 +85,7 @@ def test_parse_battery_only():
     result = parse_bthome(packet)
 
     assert 'battery' in result
-    assert abs(result['battery'] - 100.0) < 0.01
+    assert result['battery'] == approx(100.0, abs=0.01)
     assert 'temperature' not in result
     assert 'humidity' not in result
 
@@ -102,8 +103,8 @@ def test_parse_with_unknown_objects():
 
     assert 'temperature' in result
     assert 'battery' in result
-    assert abs(result['temperature'] - 100.0) < 0.01
-    assert abs(result['battery'] - 50.0) < 0.01
+    assert result['temperature'] == approx(100.0, abs=0.01)
+    assert result['battery'] == approx(50.0, abs=0.01)
 
 
 def test_parse_packet_too_short():
@@ -170,7 +171,7 @@ def test_parse_high_humidity():
     result = parse_bthome(packet)
 
     assert 'humidity' in result
-    assert abs(result['humidity'] - 99.99) < 0.01
+    assert result['humidity'] == approx(99.99, abs=0.01)
 
 
 def test_parse_zero_battery():
@@ -182,4 +183,4 @@ def test_parse_zero_battery():
     result = parse_bthome(packet)
 
     assert 'battery' in result
-    assert abs(result['battery'] - 0.0) < 0.01
+    assert result['battery'] == approx(0.0, abs=0.01)

@@ -1,6 +1,7 @@
 # ABOUTME: Unit tests for Prometheus metrics module
 # ABOUTME: Tests metric registration, updates, and multi-device handling
 import time
+from pytest import approx
 from prometheus_client import REGISTRY
 
 from ble_exporter.metrics import (
@@ -26,15 +27,15 @@ def test_update_metrics_with_all_measurements():
 
     # Verify temperature
     temp_value = temperature_gauge.labels(device=device_name)._value.get()
-    assert abs(temp_value - 21.5) < 0.01
+    assert temp_value == approx(21.5, abs=0.01)
 
     # Verify humidity
     humidity_value = humidity_gauge.labels(device=device_name)._value.get()
-    assert abs(humidity_value - 65.4) < 0.01
+    assert humidity_value == approx(65.4, abs=0.01)
 
     # Verify battery
     battery_value = battery_gauge.labels(device=device_name)._value.get()
-    assert abs(battery_value - 85.0) < 0.01
+    assert battery_value == approx(85.0, abs=0.01)
 
     # Verify seen is set to 1
     seen_value = seen_gauge.labels(device=device_name)._value.get()
@@ -56,7 +57,7 @@ def test_update_metrics_partial_measurements():
 
     # Verify temperature is set
     temp_value = temperature_gauge.labels(device=device_name)._value.get()
-    assert abs(temp_value - 18.3) < 0.01
+    assert temp_value == approx(18.3, abs=0.01)
 
     # Verify seen and last_update are still set
     seen_value = seen_gauge.labels(device=device_name)._value.get()
@@ -77,14 +78,14 @@ def test_update_metrics_multiple_devices():
     # Verify device1 metrics
     temp1 = temperature_gauge.labels(device="device1")._value.get()
     humidity1 = humidity_gauge.labels(device="device1")._value.get()
-    assert abs(temp1 - 20.0) < 0.01
-    assert abs(humidity1 - 50.0) < 0.01
+    assert temp1 == approx(20.0, abs=0.01)
+    assert humidity1 == approx(50.0, abs=0.01)
 
     # Verify device2 metrics
     temp2 = temperature_gauge.labels(device="device2")._value.get()
     humidity2 = humidity_gauge.labels(device="device2")._value.get()
-    assert abs(temp2 - 25.0) < 0.01
-    assert abs(humidity2 - 60.0) < 0.01
+    assert temp2 == approx(25.0, abs=0.01)
+    assert humidity2 == approx(60.0, abs=0.01)
 
 
 def test_update_metrics_overwrites_previous_values():
@@ -94,12 +95,12 @@ def test_update_metrics_overwrites_previous_values():
     # First update
     update_metrics(device_name, {'temperature': 22.0})
     temp_value = temperature_gauge.labels(device=device_name)._value.get()
-    assert abs(temp_value - 22.0) < 0.01
+    assert temp_value == approx(22.0, abs=0.01)
 
     # Second update with different value
     update_metrics(device_name, {'temperature': 23.5})
     temp_value = temperature_gauge.labels(device=device_name)._value.get()
-    assert abs(temp_value - 23.5) < 0.01
+    assert temp_value == approx(23.5, abs=0.01)
 
 
 def test_metrics_exist_in_registry():
@@ -129,7 +130,7 @@ def test_metrics_have_device_label():
             for sample in metric_family.samples:
                 if sample.labels.get('device') == device_name:
                     found_metric = True
-                    assert abs(sample.value - 19.5) < 0.01
+                    assert sample.value == approx(19.5, abs=0.01)
 
     assert found_metric, "Metric with device label not found in registry"
 
@@ -145,7 +146,7 @@ def test_update_metrics_with_negative_temperature():
     update_metrics(device_name, measurements)
 
     temp_value = temperature_gauge.labels(device=device_name)._value.get()
-    assert abs(temp_value - (-10.5)) < 0.01
+    assert temp_value == approx(-10.5, abs=0.01)
 
 
 def test_update_metrics_with_zero_battery():
