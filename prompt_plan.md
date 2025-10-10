@@ -169,7 +169,7 @@ TESTS:
 Keep code ≤ 100 LoC.
 ```
 
-### Prompt 5 – BLE Scanner Stub & Tests
+### Prompt 5 – BLE Scanner Stub & Tests ✅ COMPLETED
 
 ```text
 TASK: Provide a scan abstraction usable without BLE hardware.
