@@ -92,7 +92,10 @@ async def cleanup_background_tasks(app):
         app: aiohttp Application instance
     """
     app['scan_task'].cancel()
-    await app['scan_task']
+    try:
+        await app['scan_task']
+    except asyncio.CancelledError:
+        pass  # Expected when cancelling the task
 
 
 def main():

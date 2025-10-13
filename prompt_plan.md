@@ -311,7 +311,7 @@ Add doc section to README for installation.
 No tests needed.
 ```
 
-### Prompt 12 – End-to-End Test & Docs
+### Prompt 12 – End-to-End Test & Docs ✅ COMPLETED
 
 ```text
 TASK: Final polish (milestone 12-1 & 12-2).
