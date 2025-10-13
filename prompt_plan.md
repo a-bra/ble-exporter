@@ -245,7 +245,7 @@ TESTS:
 Ensure healthz test still passes.
 ```
 
-### Prompt 9 – /status Endpoint
+### Prompt 9 – /status Endpoint ✅ COMPLETED
 
 ```text
 TASK: Add scan status endpoint (milestone 9-1 & 9-2).
