@@ -291,7 +291,7 @@ TESTS:
 Keep CLI runnable: `python -m ble_exporter.main --config config.yaml`.
 ```
 
-### Prompt 11 – Systemd & Ops
+### Prompt 11 – Systemd & Ops ✅ COMPLETED
 
 ```text
 TASK: Add deployment artefacts (milestone 11-1).

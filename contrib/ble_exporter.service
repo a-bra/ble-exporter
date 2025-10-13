@@ -1,0 +1,26 @@
+[Unit]
+Description=BLE Sensor Prometheus Exporter
+Documentation=https://github.com/yourusername/ble_exporter
+After=network.target
+
+[Service]
+Type=simple
+User=ble
+Group=ble
+WorkingDirectory=/opt/ble_exporter
+ExecStart=/usr/bin/python3 -m ble_exporter.main --config /etc/ble_exporter/config.yaml
+Restart=on-failure
+RestartSec=10s
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/ble_exporter
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target

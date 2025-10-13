@@ -1,0 +1,25 @@
+# BLE Sensor Prometheus Exporter Configuration
+#
+# This file defines how often to scan for BLE devices, which devices to track,
+# and where to write logs.
+
+# Scan interval (seconds between scan starts)
+scan_interval_seconds: 30
+
+# Scan duration (how long each scan runs)
+scan_duration_seconds: 5
+
+# Log file path (can be relative or absolute)
+log_file: "./logs/ble_exporter.log"
+
+# HTTP server listen port
+listen_port: 8000
+
+# BLE devices to track
+# Format: "MAC_ADDRESS": "friendly_name"
+# The friendly_name will be used as the 'device' label in Prometheus metrics
+devices:
+  "A4:C1:38:XX:XX:XX": "living_room"
+  "A4:C1:38:YY:YY:YY": "bedroom"
+  # Add more devices as needed
+  # "A4:C1:38:ZZ:ZZ:ZZ": "kitchen"
