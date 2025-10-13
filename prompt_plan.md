@@ -261,7 +261,7 @@ TESTS:
 * `tests/test_exporter_status.py` verifying JSON keys/types.
 ```
 
-### Prompt 10 – Scheduler Loop Wiring
+### Prompt 10 – Scheduler Loop Wiring ✅ COMPLETED
 
 ```text
 TASK: Wire everything together (milestone 10-1 & 10-2).
