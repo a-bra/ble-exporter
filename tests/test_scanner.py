@@ -1,6 +1,7 @@
 # ABOUTME: Unit tests for BLE scanner abstraction
 # ABOUTME: Tests MockScanner functionality and get_scanner factory function
 import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from ble_exporter.scanner import MockScanner, get_scanner, BleakScannerImpl
 
@@ -93,12 +94,143 @@ def test_get_scanner_mock_with_no_data():
 
 
 @pytest.mark.asyncio
-async def test_bleak_scanner_not_implemented():
-    """Test that BleakScannerImpl raises NotImplementedError."""
+async def test_bleak_scanner_basic_scan():
+    """Test that BleakScannerImpl can perform a basic scan."""
     scanner = BleakScannerImpl()
 
-    with pytest.raises(NotImplementedError, match="BleakScannerImpl not yet implemented"):
-        await scanner.scan(duration_s=5)
+    # Mock BleakScanner
+    with patch('ble_exporter.scanner.BleakScanner') as mock_scanner_class:
+        mock_scanner_instance = AsyncMock()
+        mock_scanner_class.return_value = mock_scanner_instance
+
+        # Simulate a short scan
+        result = await scanner.scan(duration_s=1)
+
+        # Verify scanner was started and stopped
+        mock_scanner_instance.start.assert_called_once()
+        mock_scanner_instance.stop.assert_called_once()
+
+        # Result should be a list (empty in this case since no devices detected)
+        assert isinstance(result, list)
+
+
+@pytest.mark.asyncio
+async def test_bleak_scanner_detection_callback():
+    """Test that BleakScannerImpl properly processes detected devices."""
+    scanner = BleakScannerImpl()
+
+    # Create mock device and advertisement data
+    mock_device = MagicMock()
+    mock_device.address = "A4:C1:38:11:22:33"
+
+    mock_ad_data = MagicMock()
+    # Simulate service data with BTHome packet
+    mock_ad_data.service_data = {
+        "0000181a-0000-1000-8000-00805f9b34fb": bytes([0x02, 0x02, 0x66, 0x08])
+    }
+
+    # Call detection callback directly
+    scanner._detection_callback(mock_device, mock_ad_data)
+
+    # Verify the advertisement was stored
+    assert "A4:C1:38:11:22:33" in scanner.advertisements
+    assert scanner.advertisements["A4:C1:38:11:22:33"] == bytes([0x02, 0x02, 0x66, 0x08])
+
+
+@pytest.mark.asyncio
+async def test_bleak_scanner_multiple_devices():
+    """Test that BleakScannerImpl handles multiple devices."""
+    scanner = BleakScannerImpl()
+
+    # Create mock devices
+    device1 = MagicMock()
+    device1.address = "A4:C1:38:11:22:33"
+    ad_data1 = MagicMock()
+    ad_data1.service_data = {"uuid1": bytes([0x02, 0x02, 0x66, 0x08])}
+
+    device2 = MagicMock()
+    device2.address = "A4:C1:38:44:55:66"
+    ad_data2 = MagicMock()
+    ad_data2.service_data = {"uuid2": bytes([0x02, 0x0A, 0x55])}
+
+    # Call detection callbacks
+    scanner._detection_callback(device1, ad_data1)
+    scanner._detection_callback(device2, ad_data2)
+
+    # Verify both devices were stored
+    assert len(scanner.advertisements) == 2
+    assert "A4:C1:38:11:22:33" in scanner.advertisements
+    assert "A4:C1:38:44:55:66" in scanner.advertisements
+
+
+@pytest.mark.asyncio
+async def test_bleak_scanner_empty_service_data():
+    """Test that BleakScannerImpl ignores devices without service data."""
+    scanner = BleakScannerImpl()
+
+    mock_device = MagicMock()
+    mock_device.address = "A4:C1:38:11:22:33"
+
+    mock_ad_data = MagicMock()
+    mock_ad_data.service_data = {}  # Empty service data
+
+    # Call detection callback
+    scanner._detection_callback(mock_device, mock_ad_data)
+
+    # Verify no advertisements were stored
+    assert len(scanner.advertisements) == 0
+
+
+@pytest.mark.asyncio
+async def test_bleak_scanner_no_service_data():
+    """Test that BleakScannerImpl handles advertisements with no service data."""
+    scanner = BleakScannerImpl()
+
+    mock_device = MagicMock()
+    mock_device.address = "A4:C1:38:11:22:33"
+
+    mock_ad_data = MagicMock()
+    mock_ad_data.service_data = None  # No service data
+
+    # Call detection callback
+    scanner._detection_callback(mock_device, mock_ad_data)
+
+    # Verify no advertisements were stored
+    assert len(scanner.advertisements) == 0
+
+
+@pytest.mark.asyncio
+async def test_bleak_scanner_clears_previous_results():
+    """Test that BleakScannerImpl clears results between scans."""
+    scanner = BleakScannerImpl()
+
+    # Add some fake data to advertisements
+    scanner.advertisements["AA:BB:CC:DD:EE:FF"] = bytes([0xFF])
+
+    with patch('ble_exporter.scanner.BleakScanner') as mock_scanner_class:
+        mock_scanner_instance = AsyncMock()
+        mock_scanner_class.return_value = mock_scanner_instance
+
+        # Perform a new scan
+        await scanner.scan(duration_s=1)
+
+        # Previous results should be cleared
+        assert len(scanner.advertisements) == 0
+
+
+@pytest.mark.asyncio
+async def test_bleak_scanner_handles_scan_error():
+    """Test that BleakScannerImpl raises RuntimeError on scan failure."""
+    scanner = BleakScannerImpl()
+
+    with patch('ble_exporter.scanner.BleakScanner') as mock_scanner_class:
+        mock_scanner_instance = AsyncMock()
+        mock_scanner_instance.start.side_effect = Exception("BLE adapter not found")
+        mock_scanner_class.return_value = mock_scanner_instance
+
+        # Scan should raise RuntimeError
+        with pytest.raises(RuntimeError, match="BLE scan failed"):
+            await scanner.scan(duration_s=1)
 
 
 @pytest.mark.asyncio

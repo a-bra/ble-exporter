@@ -2,6 +2,9 @@
 # ABOUTME: Provides Protocol interface and MockScanner for testing without hardware
 from typing import Protocol, Optional
 import asyncio
+from bleak import BleakScanner
+from bleak.backends.device import BLEDevice
+from bleak.backends.scanner import AdvertisementData
 
 
 class AbstractScanner(Protocol):
@@ -24,8 +27,36 @@ class BleakScannerImpl:
     """
     Real BLE scanner implementation using bleak library.
 
-    This is a placeholder for future implementation.
+    Scans for BLE advertisements and extracts service data containing BTHome packets.
     """
+
+    def __init__(self):
+        """Initialize the BLE scanner."""
+        self.advertisements: dict[str, bytes] = {}
+
+    def _detection_callback(self, device: BLEDevice, advertisement_data: AdvertisementData):
+        """
+        Callback invoked when a BLE advertisement is detected.
+
+        Extracts service data (which contains BTHome packets for ATC_MiThermometer devices)
+        and stores it keyed by MAC address.
+
+        Args:
+            device: BLE device information
+            advertisement_data: Advertisement data including service data
+        """
+        mac_address = device.address
+
+        # BTHome data is typically in service_data
+        # ATC_MiThermometer with BTHome uses service UUID 0x181A or custom UUIDs
+        # We collect all service data and let the parser validate it
+        if advertisement_data.service_data:
+            # Take the first service data entry
+            # BTHome packets are self-describing with version byte at start
+            for uuid, data in advertisement_data.service_data.items():
+                if data:
+                    self.advertisements[mac_address] = bytes(data)
+                    break
 
     async def scan(self, duration_s: int) -> list[tuple[str, bytes]]:
         """
@@ -35,12 +66,32 @@ class BleakScannerImpl:
             duration_s: Duration to scan in seconds
 
         Returns:
-            List of (mac_address, payload_bytes) tuples
+            List of (mac_address, payload_bytes) tuples containing service data
 
         Raises:
-            NotImplementedError: This is a placeholder
+            RuntimeError: If BLE adapter is unavailable or scanning fails
         """
-        raise NotImplementedError("BleakScannerImpl not yet implemented")
+        # Clear previous scan results
+        self.advertisements = {}
+
+        try:
+            # Create scanner with detection callback
+            scanner = BleakScanner(detection_callback=self._detection_callback)
+
+            # Start scanning
+            await scanner.start()
+
+            # Scan for specified duration
+            await asyncio.sleep(duration_s)
+
+            # Stop scanning
+            await scanner.stop()
+
+        except Exception as e:
+            raise RuntimeError(f"BLE scan failed: {e}") from e
+
+        # Convert dict to list of tuples
+        return list(self.advertisements.items())
 
 
 class MockScanner:
