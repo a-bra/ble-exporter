@@ -242,8 +242,62 @@ ble_exporter/
        scanner.py         # BLE scanning abstraction
        metrics.py         # Prometheus metrics registry
        exporter.py        # HTTP server (aiohttp)
+       diagnostics.py     # Diagnostic tool for troubleshooting sensors
        main.py            # Application entrypoint
 ```
+
+### Diagnostic Tool
+
+The BLE diagnostic tool helps troubleshoot sensor advertisement issues by monitoring a specific MAC address and displaying all advertisement data in real-time.
+
+**Basic usage:**
+
+```bash
+# Monitor a sensor for 30 seconds
+python -m ble_exporter.diagnostics A4:C1:38:B6:36:7A --duration 30
+
+# Continuous monitoring (Ctrl+C to stop)
+python -m ble_exporter.diagnostics A4:C1:38:B6:36:7A
+
+# Save results to JSON with auto-generated filename
+python -m ble_exporter.diagnostics A4:C1:38:B6:36:7A --json
+
+# Save to custom JSON file, suppress console output
+python -m ble_exporter.diagnostics A4:C1:38:B6:36:7A --json debug.json --quiet
+```
+
+**What it shows:**
+- All BLE advertisement data (not just first service UUID)
+- RSSI (signal strength) for each advertisement
+- All service UUIDs and their hex data
+- Manufacturer data (if present)
+- BTHome parsing attempts with success/failure indicators
+- Statistics summary: total ads, parse success rate, average RSSI
+
+**Example output:**
+
+```
+[2025-11-03 14:23:15.123] RSSI: -45 dBm
+  Service UUID: 0000181a-0000-1000-8000-00805f9b34fb
+    Data (hex): 02 02 c8 09 03 84 19 0a 64
+    BTHome parse: ✅ SUCCESS
+      - Temperature: 25.04°C
+      - Humidity: 64.52%
+      - Battery: 100%
+
+[2025-11-03 14:23:45.456] RSSI: -50 dBm
+  Service UUID: 0000181a-0000-1000-8000-00805f9b34fb
+    Data (hex): 40 00 68 0c 69 0b 10 00 11 01
+    BTHome parse: ❌ FAILED - No valid sensor data found in packet
+```
+
+The JSON output file is named automatically with timestamp: `ble_diagnostics_A4C138B6367A_20251103_142315.json`
+
+**Use cases:**
+- Verify sensors are advertising in BTHome v2 format
+- Debug parse errors by seeing raw advertisement data
+- Check signal strength (RSSI) for placement issues
+- Identify which service UUID contains BTHome data
 
 ## Troubleshooting
 
