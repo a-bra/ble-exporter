@@ -32,12 +32,16 @@ def mock_ad_data_bthome_v2():
 
 @pytest.fixture
 def mock_ad_data_custom_format():
-    """Create mock advertisement data with custom (non-BTHome) format."""
+    """Create mock advertisement data with custom (non-BTHome) format.
+
+    This packet has only unknown object IDs, so it will fail to parse
+    with "No valid sensor data found in packet".
+    """
     ad_data = MagicMock()
     ad_data.rssi = -50
-    # Custom format (0x40 first byte - not BTHome)
+    # Packet with only unknown object IDs (no temp/humidity/battery/voltage)
     ad_data.service_data = {
-        "0000181a-0000-1000-8000-00805f9b34fb": bytes([0x40, 0x00, 0x68, 0x0c, 0x69, 0x0b])
+        "0000181a-0000-1000-8000-00805f9b34fb": bytes([0x40, 0xFF, 0xAA, 0xEE, 0xBB])
     }
     ad_data.manufacturer_data = {
         1234: bytes([0x01, 0x02, 0x03])

@@ -184,3 +184,84 @@ def test_parse_zero_battery():
 
     assert 'battery' in result
     assert result['battery'] == approx(0.0, abs=0.01)
+
+
+def test_parse_voltage_with_0x0a_in_data():
+    """Test that voltage (0x0C) containing 0x0A doesn't get misread as battery.
+
+    This tests the bug where voltage value 0x0AF8 (2808mV) was incorrectly
+    parsed as battery 16% because 0x0A was treated as battery object ID.
+    """
+    # Device info: 0x40
+    # Counter/padding: 0x00 0x21
+    # Voltage: 0x0C + 0xF8 0x0A (2808mV = 0x0AF8)
+    # Power: 0x10 + 0x00
+    # Current: 0x11 + 0x01
+    packet = bytes([0x40, 0x00, 0x21, 0x0C, 0xF8, 0x0A, 0x10, 0x00, 0x11, 0x01])
+
+    result = parse_bthome(packet)
+
+    # Should parse voltage, not incorrectly detect battery
+    assert 'battery' in result
+    # 2808mV = 2.808V -> approx 81% battery ((2.808-2.0)/(3.0-2.0)*100)
+    assert result['battery'] == approx(80.8, abs=0.5)
+    assert 'temperature' not in result
+    assert 'humidity' not in result
+
+
+def test_parse_voltage_only():
+    """Test parsing packet with voltage (0x0C) converted to battery percentage."""
+    # Device info: 0x40
+    # Voltage: 0x0C + 0x7B 0x0B (2939mV = 0x0B7B = fresh battery ~75%)
+    packet = bytes([0x40, 0x0C, 0x7B, 0x0B])
+
+    result = parse_bthome(packet)
+
+    assert 'battery' in result
+    # 2939mV = 2.939V -> ~94% battery ((2.939-2.0)/(3.0-2.0)*100)
+    assert result['battery'] == approx(93.9, abs=0.5)
+
+
+def test_parse_voltage_depleted():
+    """Test parsing low voltage (near 2.0V)."""
+    # Device info: 0x40
+    # Voltage: 0x0C + 0xD0 0x07 (2000mV = 0x07D0 = depleted)
+    packet = bytes([0x40, 0x0C, 0xD0, 0x07])
+
+    result = parse_bthome(packet)
+
+    assert 'battery' in result
+    # 2000mV = 2.0V -> 0% battery
+    assert result['battery'] == approx(0.0, abs=0.5)
+
+
+def test_parse_voltage_full():
+    """Test parsing full voltage (3.0V)."""
+    # Device info: 0x40
+    # Voltage: 0x0C + 0xB8 0x0B (3000mV = 0x0BB8)
+    packet = bytes([0x40, 0x0C, 0xB8, 0x0B])
+
+    result = parse_bthome(packet)
+
+    assert 'battery' in result
+    # 3000mV = 3.0V -> 100% battery
+    assert result['battery'] == approx(100.0, abs=0.5)
+
+
+def test_parse_real_sensor_packet_with_voltage():
+    """Test real packet from sensor that was failing: temp+humidity then voltage.
+
+    This reproduces the actual diagnostic capture from the baby_room sensor.
+    """
+    # Real packet with temp and humidity
+    packet1 = bytes([0x40, 0x00, 0x05, 0x01, 0x5C, 0x02, 0x88, 0x0A, 0x03, 0x9B, 0x14])
+    result1 = parse_bthome(packet1)
+    assert 'temperature' in result1
+    assert 'humidity' in result1
+
+    # Real packet with voltage that was failing to parse
+    packet2 = bytes([0x40, 0x00, 0x05, 0x0C, 0x7B, 0x0B, 0x10, 0x00, 0x11, 0x01])
+    result2 = parse_bthome(packet2)
+    # Should successfully extract battery from voltage now
+    assert 'battery' in result2
+    assert result2['battery'] == approx(93.9, abs=1.0)
