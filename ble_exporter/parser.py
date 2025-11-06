@@ -43,7 +43,7 @@ def parse_bthome(payload: bytes) -> dict[str, float]:
             if idx + 2 > len(payload):
                 raise ValueError("Incomplete temperature data")
             temp_raw = struct.unpack('<h', payload[idx:idx+2])[0]
-            result['temperature'] = temp_raw * 0.01
+            result['temperature'] = round(temp_raw * 0.01, 2)
             idx += 2
 
         # Humidity: 0x03, unsigned int16, little-endian, factor 0.01
@@ -51,7 +51,7 @@ def parse_bthome(payload: bytes) -> dict[str, float]:
             if idx + 2 > len(payload):
                 raise ValueError("Incomplete humidity data")
             humidity_raw = struct.unpack('<H', payload[idx:idx+2])[0]
-            result['humidity'] = humidity_raw * 0.01
+            result['humidity'] = round(humidity_raw * 0.01, 2)
             idx += 2
 
         # Battery: 0x0A, unsigned int8, factor 1
@@ -76,6 +76,6 @@ def parse_bthome(payload: bytes) -> dict[str, float]:
                 idx += 1
 
     if not result:
-        raise ValueError("No valid sensor data found in packet")
+        raise ValueError(f"No valid sensor data found in packet - {payload}")
 
     return result
