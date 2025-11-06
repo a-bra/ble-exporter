@@ -124,7 +124,11 @@ async def test_scan_loop_updates_status_tracker(mock_config, mock_logger, status
 
 @pytest.mark.asyncio
 async def test_scan_loop_ignores_unknown_devices(mock_config, mock_logger, status_tracker):
-    """Test that scan loop ignores devices not in config."""
+    """Test that scan loop ignores devices not in config.
+
+    With early filtering in aggregate_scan_results, unknown devices are
+    filtered out before reaching scan_loop's device processing logic.
+    """
     test_payload = bytes([0x02, 0x02, 0x66, 0x08])
 
     # Scanner returns an unknown device
@@ -140,11 +144,8 @@ async def test_scan_loop_ignores_unknown_devices(mock_config, mock_logger, statu
     except asyncio.CancelledError:
         pass
 
-    # Verify no devices were counted
+    # Verify no devices were counted (filtered out early)
     assert status_tracker.devices_seen == 0
-
-    # Verify logger.debug was called for unknown device
-    mock_logger.debug.assert_called()
 
 
 @pytest.mark.asyncio

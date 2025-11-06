@@ -28,18 +28,20 @@ class BleakScannerImpl:
     Real BLE scanner implementation using bleak library.
 
     Scans for BLE advertisements and extracts service data containing BTHome packets.
+    Collects ALL packets during scan period (sensors may send multiple packets
+    with alternating measurements).
     """
 
     def __init__(self):
         """Initialize the BLE scanner."""
-        self.advertisements: dict[str, bytes] = {}
+        self.advertisements: list[tuple[str, bytes]] = []
 
     def _detection_callback(self, device: BLEDevice, advertisement_data: AdvertisementData):
         """
         Callback invoked when a BLE advertisement is detected.
 
         Extracts service data (which contains BTHome packets for ATC_MiThermometer devices)
-        and stores it keyed by MAC address.
+        and appends it to the list of collected advertisements.
 
         Args:
             device: BLE device information
@@ -55,24 +57,29 @@ class BleakScannerImpl:
             # BTHome packets are self-describing with version byte at start
             for uuid, data in advertisement_data.service_data.items():
                 if data:
-                    self.advertisements[mac_address] = bytes(data)
+                    self.advertisements.append((mac_address, bytes(data)))
                     break
 
     async def scan(self, duration_s: int) -> list[tuple[str, bytes]]:
         """
         Scan for BLE advertisements using bleak.
 
+        Collects ALL advertisements during the scan period, including multiple
+        packets from the same MAC address (sensors may alternate between sending
+        different measurement types).
+
         Args:
             duration_s: Duration to scan in seconds
 
         Returns:
-            List of (mac_address, payload_bytes) tuples containing service data
+            List of (mac_address, payload_bytes) tuples containing service data.
+            May include multiple entries for the same MAC address.
 
         Raises:
             RuntimeError: If BLE adapter is unavailable or scanning fails
         """
         # Clear previous scan results
-        self.advertisements = {}
+        self.advertisements = []
 
         try:
             # Create scanner with detection callback
@@ -90,8 +97,8 @@ class BleakScannerImpl:
         except Exception as e:
             raise RuntimeError(f"BLE scan failed: {e}") from e
 
-        # Convert dict to list of tuples
-        return list(self.advertisements.items())
+        # Return all collected advertisements
+        return self.advertisements
 
 
 class MockScanner:

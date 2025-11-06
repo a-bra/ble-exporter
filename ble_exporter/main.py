@@ -43,6 +43,8 @@ def aggregate_scan_results(
     # Group packets by MAC address
     packets_by_mac: dict[str, list[bytes]] = {}
     for mac, payload in scan_results:
+        if mac not in known_macs:
+            continue
         if mac not in packets_by_mac:
             packets_by_mac[mac] = []
         packets_by_mac[mac].append(payload)

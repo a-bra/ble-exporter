@@ -219,15 +219,16 @@ def test_aggregate_no_known_macs(mock_logger):
 
     result = aggregate_scan_results(scan_results, known_macs, mock_logger)
 
-    # Device should still be in result (filtering happens in scan_loop)
-    assert "A4:C1:38:11:22:33" in result
+    # Device should NOT be in result (early filtering skips unknown MACs)
+    assert "A4:C1:38:11:22:33" not in result
+    assert result == {}
 
     # No warnings (not a known device)
     mock_logger.warning.assert_not_called()
 
 
 def test_aggregate_unknown_device_with_valid_packet(mock_logger):
-    """Test that unknown devices with valid packets are included in result."""
+    """Test that unknown devices are filtered out early."""
     packet = bytes([0x02, 0x02, 0x66, 0x08])  # Temp: 21.5°C
 
     scan_results = [
@@ -238,9 +239,9 @@ def test_aggregate_unknown_device_with_valid_packet(mock_logger):
 
     result = aggregate_scan_results(scan_results, known_macs, mock_logger)
 
-    # Unknown device should be in result (filtering happens later)
-    assert "FF:FF:FF:FF:FF:FF" in result
-    assert result["FF:FF:FF:FF:FF:FF"]["temperature"] == pytest.approx(21.5, abs=0.01)
+    # Unknown device should NOT be in result (early filtering)
+    assert "FF:FF:FF:FF:FF:FF" not in result
+    assert result == {}
 
-    # No warnings
+    # No warnings (unknown device)
     mock_logger.warning.assert_not_called()

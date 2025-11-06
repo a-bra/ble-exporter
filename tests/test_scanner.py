@@ -133,8 +133,9 @@ async def test_bleak_scanner_detection_callback():
     scanner._detection_callback(mock_device, mock_ad_data)
 
     # Verify the advertisement was stored
-    assert "A4:C1:38:11:22:33" in scanner.advertisements
-    assert scanner.advertisements["A4:C1:38:11:22:33"] == bytes([0x02, 0x02, 0x66, 0x08])
+    assert len(scanner.advertisements) == 1
+    assert scanner.advertisements[0][0] == "A4:C1:38:11:22:33"
+    assert scanner.advertisements[0][1] == bytes([0x02, 0x02, 0x66, 0x08])
 
 
 @pytest.mark.asyncio
@@ -159,8 +160,9 @@ async def test_bleak_scanner_multiple_devices():
 
     # Verify both devices were stored
     assert len(scanner.advertisements) == 2
-    assert "A4:C1:38:11:22:33" in scanner.advertisements
-    assert "A4:C1:38:44:55:66" in scanner.advertisements
+    macs = [mac for mac, _ in scanner.advertisements]
+    assert "A4:C1:38:11:22:33" in macs
+    assert "A4:C1:38:44:55:66" in macs
 
 
 @pytest.mark.asyncio
@@ -205,7 +207,7 @@ async def test_bleak_scanner_clears_previous_results():
     scanner = BleakScannerImpl()
 
     # Add some fake data to advertisements
-    scanner.advertisements["AA:BB:CC:DD:EE:FF"] = bytes([0xFF])
+    scanner.advertisements.append(("AA:BB:CC:DD:EE:FF", bytes([0xFF])))
 
     with patch('ble_exporter.scanner.BleakScanner') as mock_scanner_class:
         mock_scanner_instance = AsyncMock()
@@ -249,3 +251,37 @@ async def test_mock_scanner_multiple_devices():
     assert result[0][0] == "A4:C1:38:11:22:33"
     assert result[1][0] == "A4:C1:38:44:55:66"
     assert result[2][0] == "A4:C1:38:77:88:99"
+
+
+@pytest.mark.asyncio
+async def test_bleak_scanner_multiple_packets_same_device():
+    """Test that BleakScannerImpl collects multiple packets from same MAC.
+
+    This simulates real sensor behavior where the same device sends multiple
+    advertisements during the scan period (alternating between temp/humidity
+    and battery packets).
+    """
+    scanner = BleakScannerImpl()
+
+    # Create mock device
+    device = MagicMock()
+    device.address = "A4:C1:38:11:22:33"
+
+    # First packet: temp + humidity
+    ad_data1 = MagicMock()
+    ad_data1.service_data = {"uuid1": bytes([0x02, 0x02, 0x66, 0x08, 0x03, 0xBF, 0x28])}
+
+    # Second packet: battery (from same device)
+    ad_data2 = MagicMock()
+    ad_data2.service_data = {"uuid1": bytes([0x02, 0x0A, 0x55])}
+
+    # Call detection callbacks twice for same device
+    scanner._detection_callback(device, ad_data1)
+    scanner._detection_callback(device, ad_data2)
+
+    # Verify BOTH packets were collected (not overwritten)
+    assert len(scanner.advertisements) == 2
+    assert scanner.advertisements[0][0] == "A4:C1:38:11:22:33"
+    assert scanner.advertisements[1][0] == "A4:C1:38:11:22:33"
+    assert scanner.advertisements[0][1] == bytes([0x02, 0x02, 0x66, 0x08, 0x03, 0xBF, 0x28])
+    assert scanner.advertisements[1][1] == bytes([0x02, 0x0A, 0x55])
