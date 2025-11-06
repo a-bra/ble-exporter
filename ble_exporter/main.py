@@ -13,9 +13,78 @@ from ble_exporter.metrics import update_metrics
 from ble_exporter.exporter import create_app, StatusTracker
 
 
+def aggregate_scan_results(
+    scan_results: list[tuple[str, bytes]],
+    known_macs: set[str],
+    logger
+) -> dict[str, dict[str, float]]:
+    """
+    Aggregate measurements by MAC address within a scan period.
+
+    Groups all packets by MAC address, parses each packet, and merges
+    measurements. This handles sensors that alternate between sending
+    temperature/humidity packets and battery packets.
+
+    Args:
+        scan_results: List of (mac_address, payload) tuples from scanner
+        known_macs: Set of MAC addresses from config (for warning detection)
+        logger: Logger instance for warnings
+
+    Returns:
+        Dictionary mapping MAC address to merged measurements:
+        {"A4:C1:38:XX:XX:XX": {"temperature": 22.5, "battery": 85.0}}
+
+    Behavior:
+        - Silently skips unparseable packets
+        - Last value wins for duplicate measurements
+        - Warns if known MAC seen but ALL packets fail to parse
+        - Unknown devices included in result (filtering happens in scan_loop)
+    """
+    # Group packets by MAC address
+    packets_by_mac: dict[str, list[bytes]] = {}
+    for mac, payload in scan_results:
+        if mac not in packets_by_mac:
+            packets_by_mac[mac] = []
+        packets_by_mac[mac].append(payload)
+
+    # Track which MACs we saw vs which successfully parsed
+    seen_macs = set(packets_by_mac.keys())
+    successful_macs = set()
+
+    # Parse and merge measurements for each MAC
+    aggregated: dict[str, dict[str, float]] = {}
+
+    for mac, payloads in packets_by_mac.items():
+        merged_measurements = {}
+
+        for payload in payloads:
+            try:
+                measurements = parse_bthome(payload)
+                # Merge measurements (last value wins for duplicates)
+                merged_measurements.update(measurements)
+            except ValueError:
+                # Silently skip unparseable packets
+                pass
+
+        # Only include MAC if at least one packet parsed successfully
+        if merged_measurements:
+            aggregated[mac] = merged_measurements
+            successful_macs.add(mac)
+
+    # Warn if a known MAC was seen but all parses failed
+    failed_known_macs = (seen_macs & known_macs) - successful_macs
+    for mac in failed_known_macs:
+        logger.warning(
+            f"Device {mac} seen but all packets failed to parse. "
+            f"Check sensor firmware or BTHome format compatibility."
+        )
+
+    return aggregated
+
+
 async def scan_loop(scanner, config, status_tracker, logger):
     """
-    Background task that continuously scans for BLE devices, parses packets,
+    Background task that continuously scans for BLE devices, aggregates packets,
     and updates metrics.
 
     Args:
@@ -29,17 +98,18 @@ async def scan_loop(scanner, config, status_tracker, logger):
             logger.info(f"Starting BLE scan for {config.scan_duration_seconds}s")
             results = await scanner.scan(config.scan_duration_seconds)
 
+            # Aggregate measurements by MAC address (handles alternating packets)
+            known_macs = set(config.devices.keys())
+            aggregated = aggregate_scan_results(results, known_macs, logger)
+
+            # Update metrics only for known devices
             devices_seen = 0
-            for mac, payload in results:
+            for mac, measurements in aggregated.items():
                 device_name = config.devices.get(mac)
                 if device_name:
-                    try:
-                        measurements = parse_bthome(payload)
-                        update_metrics(device_name, measurements)
-                        devices_seen += 1
-                        logger.info(f"Updated metrics for {device_name}: {measurements}")
-                    except ValueError as e:
-                        logger.warning(f"Failed to parse packet from {mac}: {e}")
+                    update_metrics(device_name, measurements)
+                    devices_seen += 1
+                    logger.info(f"Updated metrics for {device_name}: {measurements}")
                 else:
                     logger.debug(f"Ignoring unknown device {mac}")
 

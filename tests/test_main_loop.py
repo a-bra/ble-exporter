@@ -256,3 +256,53 @@ async def test_scan_loop_warns_on_negative_sleep(mock_logger, status_tracker):
         'scan_interval_seconds' in str(call)
         for call in mock_logger.warning.call_args_list
     )
+
+
+@pytest.mark.asyncio
+async def test_scan_loop_aggregates_alternating_packets(mock_config, mock_logger, status_tracker):
+    """Test that scan loop aggregates measurements from alternating packets.
+
+    This simulates real sensor behavior where temp/humidity comes in one packet
+    and battery comes in another packet.
+    """
+    # First packet: temp + humidity
+    packet1 = bytes([
+        0x02,  # BTHome v2
+        0x02, 0x66, 0x08,  # Temperature: 21.5°C
+        0x03, 0xBF, 0x28,  # Humidity: 104.31%
+    ])
+
+    # Second packet: battery (voltage)
+    packet2 = bytes([
+        0x02,  # BTHome v2
+        0x0C, 0x7B, 0x0B,  # Voltage: 2939mV -> ~94% battery
+    ])
+
+    # Scanner returns both packets for same device
+    scanner = MockScanner(data=[
+        ("A4:C1:38:11:22:33", packet1),
+        ("A4:C1:38:11:22:33", packet2),
+    ])
+
+    # Run loop once
+    task = asyncio.create_task(
+        scan_loop(scanner, mock_config, status_tracker, mock_logger)
+    )
+    await asyncio.sleep(0.1)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    # Verify all three metrics were updated (aggregated from both packets)
+    temp_value = temperature_gauge.labels(device="living_room")._value._value
+    humidity_value = humidity_gauge.labels(device="living_room")._value._value
+    battery_value = battery_gauge.labels(device="living_room")._value._value
+
+    assert temp_value == approx(21.5, abs=0.01)
+    assert humidity_value == approx(104.31, abs=0.01)
+    assert battery_value == approx(93.9, abs=0.5)
+
+    # Verify only counted as 1 device (not 2)
+    assert status_tracker.devices_seen == 1
