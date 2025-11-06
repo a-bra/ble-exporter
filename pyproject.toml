@@ -37,3 +37,6 @@ addopts = [
     "--cov-report=term-missing",
     "-v",
 ]
+filterwarnings = [
+    "ignore::aiohttp.web_exceptions.NotAppKeyWarning",
+]
