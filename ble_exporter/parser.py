@@ -8,8 +8,8 @@ def parse_bthome(payload: bytes) -> dict[str, float]:
     Parse BTHome format BLE advertisement packet.
 
     Extracts temperature, humidity, and battery level from BTHome v2 packets.
-    Supports both battery percentage (0x0A) and voltage (0x0C) objects.
-    Voltage is converted to battery percentage using CR2032 curve (3.0V=100%, 2.0V=0%).
+    Battery is derived from voltage (0x0C) object using CR2032 discharge curve
+    (3.0V=100%, 2.0V=0%). Designed for ATC_MiThermometer sensors.
     BTHome format: https://bthome.io/format/
 
     Args:
@@ -19,7 +19,7 @@ def parse_bthome(payload: bytes) -> dict[str, float]:
         Dictionary with sensor readings:
         - 'temperature': Temperature in Celsius
         - 'humidity': Relative humidity in percent
-        - 'battery': Battery level in percent (from battery or voltage object)
+        - 'battery': Battery level in percent (from voltage object)
 
     Raises:
         ValueError: If packet format is invalid or cannot be parsed
@@ -34,9 +34,6 @@ def parse_bthome(payload: bytes) -> dict[str, float]:
     idx = 1
 
     while idx < len(payload):
-        if idx >= len(payload):
-            break
-
         object_id = payload[idx]
         idx += 1
 
@@ -56,13 +53,6 @@ def parse_bthome(payload: bytes) -> dict[str, float]:
             result['humidity'] = round(humidity_raw * 0.01, 2)
             idx += 2
 
-        # Battery: 0x0A, unsigned int8, factor 1
-        elif object_id == 0x0A:
-            if idx + 1 > len(payload):
-                raise ValueError("Incomplete battery data")
-            result['battery'] = float(payload[idx])
-            idx += 1
-
         # Voltage: 0x0C, unsigned int16, little-endian, factor 0.001V
         # Convert to battery percentage using CR2032 voltage curve
         elif object_id == 0x0C:
@@ -79,8 +69,8 @@ def parse_bthome(payload: bytes) -> dict[str, float]:
         else:
             # Unknown object ID - try to skip it
             # BTHome v2 object size mapping
-            if object_id in [0x00, 0x01, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0B, 0x0D]:
-                # These are typically 1-byte values
+            if object_id in [0x00, 0x01, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0D]:
+                # These are typically 1-byte values (0x0A is battery %, not supported)
                 idx += 1
             elif object_id in [0x04, 0x0E, 0x0F, 0x11]:
                 # These are typically 2-byte values (0x11 is current)

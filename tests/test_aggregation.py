@@ -16,12 +16,12 @@ def mock_logger():
 
 def test_aggregate_single_device_single_packet(mock_logger):
     """Test aggregation with one device and one complete packet."""
-    # BTHome packet with temp + humidity + battery
+    # BTHome packet with temp + humidity + battery (from voltage)
     packet = bytes([
         0x02,  # BTHome v2
         0x02, 0x66, 0x08,  # Temperature: 21.5°C
         0x03, 0xBF, 0x28,  # Humidity: 104.31%
-        0x0A, 0x55,        # Battery: 85%
+        0x0C, 0x50, 0x0B,  # Voltage: 2896mV -> ~89.6% battery
     ])
 
     scan_results = [
@@ -35,7 +35,7 @@ def test_aggregate_single_device_single_packet(mock_logger):
     assert "A4:C1:38:11:22:33" in result
     assert result["A4:C1:38:11:22:33"]["temperature"] == pytest.approx(21.5, abs=0.01)
     assert result["A4:C1:38:11:22:33"]["humidity"] == pytest.approx(104.31, abs=0.01)
-    assert result["A4:C1:38:11:22:33"]["battery"] == pytest.approx(85.0, abs=0.01)
+    assert result["A4:C1:38:11:22:33"]["battery"] == pytest.approx(89.6, abs=0.5)
 
     # No warnings should be logged
     mock_logger.warning.assert_not_called()
@@ -78,7 +78,7 @@ def test_aggregate_multiple_devices(mock_logger):
     """Test aggregation with multiple devices."""
     packet1 = bytes([0x02, 0x02, 0x66, 0x08])  # Temp: 21.5°C
     packet2 = bytes([0x02, 0x03, 0xBF, 0x28])  # Humidity: 104.31%
-    packet3 = bytes([0x02, 0x0A, 0x32])        # Battery: 50%
+    packet3 = bytes([0x02, 0x0C, 0xC4, 0x09])  # Voltage: 2500mV -> ~50% battery
 
     scan_results = [
         ("A4:C1:38:11:22:33", packet1),

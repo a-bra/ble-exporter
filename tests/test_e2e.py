@@ -59,14 +59,14 @@ async def test_e2e_full_application_flow(e2e_config, mock_logger):
         0x02,  # BTHome v2
         0x02, 0x66, 0x08,  # Temperature: 21.5°C
         0x03, 0xBF, 0x28,  # Humidity: 104.31%
-        0x0A, 0x55,        # Battery: 85%
+        0x0C, 0x50, 0x0B,  # Voltage: 2896mV -> ~89.6% battery
     ])
 
     test_payload_2 = bytes([
         0x02,  # BTHome v2
         0x02, 0x00, 0x00,  # Temperature: 0°C
         0x03, 0x00, 0x00,  # Humidity: 0%
-        0x0A, 0x64,        # Battery: 100%
+        0x0C, 0xB8, 0x0B,  # Voltage: 3000mV -> 100% battery
     ])
 
     scanner = MockScanner(data=[

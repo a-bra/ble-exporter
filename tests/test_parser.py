@@ -7,12 +7,12 @@ from ble_exporter.parser import parse_bthome
 
 
 def test_parse_complete_packet():
-    """Test parsing packet with temperature, humidity, and battery."""
+    """Test parsing packet with temperature, humidity, and battery (from voltage)."""
     # Device info: 0x40
     # Temperature: 0x02 + 0x66 0x08 (21.5°C = 2150 * 0.01)
     # Humidity: 0x03 + 0x8C 0x19 (65.4% = 6540 * 0.01)
-    # Battery: 0x0A + 0x55 (85%)
-    packet = bytes([0x40, 0x02, 0x66, 0x08, 0x03, 0x8C, 0x19, 0x0A, 0x55])
+    # Voltage: 0x0C + 0x50 0x0B (2896mV = 0x0B50 -> ~89.6% battery)
+    packet = bytes([0x40, 0x02, 0x66, 0x08, 0x03, 0x8C, 0x19, 0x0C, 0x50, 0x0B])
 
     result = parse_bthome(packet)
 
@@ -21,7 +21,7 @@ def test_parse_complete_packet():
     assert 'battery' in result
     assert result['temperature'] == approx(21.5, abs=0.01)
     assert result['humidity'] == approx(65.4, abs=0.01)
-    assert result['battery'] == approx(85.0, abs=0.01)
+    assert result['battery'] == approx(89.6, abs=0.5)
 
 
 def test_parse_negative_temperature():
@@ -76,35 +76,21 @@ def test_parse_humidity_only():
     assert 'battery' not in result
 
 
-def test_parse_battery_only():
-    """Test parsing packet with only battery."""
-    # Device info: 0x40
-    # Battery: 0x0A + 0x64 (100%)
-    packet = bytes([0x40, 0x0A, 0x64])
-
-    result = parse_bthome(packet)
-
-    assert 'battery' in result
-    assert result['battery'] == approx(100.0, abs=0.01)
-    assert 'temperature' not in result
-    assert 'humidity' not in result
-
-
 def test_parse_with_unknown_objects():
     """Test parsing packet that includes unknown object IDs."""
     # Device info: 0x40
     # Unknown: 0x01 + 0xFF (ignore)
     # Temperature: 0x02 + 0x10 0x27 (100.0°C = 10000 * 0.01)
     # Unknown: 0xFF + 0xAA (ignore)
-    # Battery: 0x0A + 0x32 (50%)
-    packet = bytes([0x40, 0x01, 0xFF, 0x02, 0x10, 0x27, 0xFF, 0xAA, 0x0A, 0x32])
+    # Voltage: 0x0C + 0xC4 0x09 (2500mV = 0x09C4 -> 50% battery)
+    packet = bytes([0x40, 0x01, 0xFF, 0x02, 0x10, 0x27, 0xFF, 0xAA, 0x0C, 0xC4, 0x09])
 
     result = parse_bthome(packet)
 
     assert 'temperature' in result
     assert 'battery' in result
     assert result['temperature'] == approx(100.0, abs=0.01)
-    assert result['battery'] == approx(50.0, abs=0.01)
+    assert result['battery'] == approx(50.0, abs=0.5)
 
 
 def test_parse_packet_too_short():
@@ -143,13 +129,13 @@ def test_parse_incomplete_humidity():
         parse_bthome(packet)
 
 
-def test_parse_incomplete_battery():
-    """Test that incomplete battery data raises ValueError."""
+def test_parse_incomplete_voltage():
+    """Test that incomplete voltage data raises ValueError."""
     # Device info: 0x40
-    # Battery: 0x0A + no data (should be 1 byte)
-    packet = bytes([0x40, 0x0A])
+    # Voltage: 0x0C + only 1 byte (should be 2)
+    packet = bytes([0x40, 0x0C, 0x7B])
 
-    with pytest.raises(ValueError, match="Incomplete battery data"):
+    with pytest.raises(ValueError, match="Incomplete voltage data"):
         parse_bthome(packet)
 
 
@@ -175,15 +161,15 @@ def test_parse_high_humidity():
 
 
 def test_parse_zero_battery():
-    """Test parsing zero battery value."""
+    """Test parsing depleted battery (from voltage at 2.0V or below)."""
     # Device info: 0x40
-    # Battery: 0x0A + 0x00 (0%)
-    packet = bytes([0x40, 0x0A, 0x00])
+    # Voltage: 0x0C + 0xD0 0x07 (2000mV = 0x07D0 = depleted, 0% battery)
+    packet = bytes([0x40, 0x0C, 0xD0, 0x07])
 
     result = parse_bthome(packet)
 
     assert 'battery' in result
-    assert result['battery'] == approx(0.0, abs=0.01)
+    assert result['battery'] == approx(0.0, abs=0.5)
 
 
 def test_parse_voltage_with_0x0a_in_data():

@@ -35,10 +35,10 @@ def aggregate_scan_results(
         {"A4:C1:38:XX:XX:XX": {"temperature": 22.5, "battery": 85.0}}
 
     Behavior:
+        - Filters to only known MACs (early optimization)
         - Silently skips unparseable packets
         - Last value wins for duplicate measurements
         - Warns if known MAC seen but ALL packets fail to parse
-        - Unknown devices included in result (filtering happens in scan_loop)
     """
     # Group packets by MAC address
     packets_by_mac: dict[str, list[bytes]] = {}
@@ -104,16 +104,13 @@ async def scan_loop(scanner, config, status_tracker, logger):
             known_macs = set(config.devices.keys())
             aggregated = aggregate_scan_results(results, known_macs, logger)
 
-            # Update metrics only for known devices
+            # Update metrics for all devices (already filtered to known MACs)
             devices_seen = 0
             for mac, measurements in aggregated.items():
-                device_name = config.devices.get(mac)
-                if device_name:
-                    update_metrics(device_name, measurements)
-                    devices_seen += 1
-                    logger.info(f"Updated metrics for {device_name}: {measurements}")
-                else:
-                    logger.debug(f"Ignoring unknown device {mac}")
+                device_name = config.devices[mac]  # Guaranteed to exist
+                update_metrics(device_name, measurements)
+                devices_seen += 1
+                logger.info(f"Updated metrics for {device_name}: {measurements}")
 
             # Update status tracker with current scan results
             timestamp = int(time.time())
