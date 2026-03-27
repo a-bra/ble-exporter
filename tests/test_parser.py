@@ -93,6 +93,52 @@ def test_parse_with_unknown_objects():
     assert result['battery'] == approx(50.0, abs=0.5)
 
 
+def test_parse_with_2byte_unknown_object():
+    """Test parsing packet with 2-byte unknown object (0x11 - Current).
+
+    Verifies that parser correctly skips 2-byte objects and continues
+    parsing subsequent objects without misalignment.
+    """
+    # Device info: 0x40
+    # Temperature: 0x02 + 0x66 0x08 (21.5°C = 2150 * 0.01)
+    # Current: 0x11 + 0xAA 0xBB (2-byte unknown, should skip both)
+    # Humidity: 0x03 + 0x8C 0x19 (65.4% = 6540 * 0.01)
+    packet = bytes([0x40, 0x02, 0x66, 0x08, 0x11, 0xAA, 0xBB, 0x03, 0x8C, 0x19])
+
+    result = parse_bthome(packet)
+
+    # Should successfully parse temp and humidity despite 2-byte Current object in middle
+    assert 'temperature' in result
+    assert 'humidity' in result
+    assert result['temperature'] == approx(21.5, abs=0.01)
+    assert result['humidity'] == approx(65.4, abs=0.01)
+    # Current not supported, should not be in result
+    assert 'current' not in result
+
+
+def test_parse_with_3byte_unknown_object():
+    """Test parsing packet with 3-byte unknown object (0x10 - Power).
+
+    Verifies that parser correctly skips 3-byte objects and continues
+    parsing subsequent objects without misalignment.
+    """
+    # Device info: 0x40
+    # Temperature: 0x02 + 0x66 0x08 (21.5°C = 2150 * 0.01)
+    # Power: 0x10 + 0xAA 0xBB 0xCC (3-byte unknown, should skip all 3)
+    # Humidity: 0x03 + 0x8C 0x19 (65.4% = 6540 * 0.01)
+    packet = bytes([0x40, 0x02, 0x66, 0x08, 0x10, 0xAA, 0xBB, 0xCC, 0x03, 0x8C, 0x19])
+
+    result = parse_bthome(packet)
+
+    # Should successfully parse temp and humidity despite 3-byte Power object in middle
+    assert 'temperature' in result
+    assert 'humidity' in result
+    assert result['temperature'] == approx(21.5, abs=0.01)
+    assert result['humidity'] == approx(65.4, abs=0.01)
+    # Power not supported, should not be in result
+    assert 'power' not in result
+
+
 def test_parse_packet_too_short():
     """Test that packets shorter than 2 bytes raise ValueError."""
     packet = bytes([0x40])
@@ -251,3 +297,20 @@ def test_parse_real_sensor_packet_with_voltage():
     # Should successfully extract battery from voltage now
     assert 'battery' in result2
     assert result2['battery'] == approx(93.9, abs=1.0)
+
+
+def test_parse_with_completely_unknown_object_id():
+    """Test parser skips object IDs not in any predefined size list.
+
+    Object ID 0xEE is not in any of the known size categories. The parser
+    should skip 1 byte (default) and continue parsing the rest of the packet.
+    """
+    # Device info: 0x40
+    # Unknown object: 0xEE + 0xAA (1 byte skipped as data)
+    # Temperature: 0x02 + 0x66 0x08 (21.5°C)
+    packet = bytes([0x40, 0xEE, 0xAA, 0x02, 0x66, 0x08])
+
+    result = parse_bthome(packet)
+
+    assert 'temperature' in result
+    assert result['temperature'] == approx(21.5, abs=0.01)

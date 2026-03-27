@@ -6,6 +6,7 @@ from prometheus_client import REGISTRY
 
 from ble_exporter.metrics import (
     update_metrics,
+    clear_device_metrics,
     temperature_gauge,
     humidity_gauge,
     battery_gauge,
@@ -175,3 +176,77 @@ def test_update_metrics_empty_measurements():
 
     last_update_value = last_update_gauge.labels(device=device_name)._value.get()
     assert abs(last_update_value - time.time()) < 2.0
+
+
+def test_clear_device_metrics_removes_sensor_values():
+    """Test that clearing a device removes its sensor metrics from registry output."""
+    device_name = "clear_test_device"
+
+    # First set all metrics
+    update_metrics(device_name, {
+        'temperature': 22.0,
+        'humidity': 55.0,
+        'battery': 90.0,
+    })
+
+    # Verify metrics exist in registry
+    registry_output = set()
+    for metric_family in REGISTRY.collect():
+        for sample in metric_family.samples:
+            if sample.labels.get('device') == device_name:
+                registry_output.add(metric_family.name)
+
+    assert 'ble_sensor_temperature_celsius' in registry_output
+    assert 'ble_sensor_humidity_percent' in registry_output
+    assert 'ble_sensor_battery_percent' in registry_output
+    assert 'ble_sensor_last_update_timestamp_seconds' in registry_output
+
+    # Clear the device metrics
+    clear_device_metrics(device_name)
+
+    # Verify sensor metrics are gone from registry output
+    remaining_metrics = set()
+    for metric_family in REGISTRY.collect():
+        for sample in metric_family.samples:
+            if sample.labels.get('device') == device_name:
+                remaining_metrics.add(metric_family.name)
+
+    assert 'ble_sensor_temperature_celsius' not in remaining_metrics
+    assert 'ble_sensor_humidity_percent' not in remaining_metrics
+    assert 'ble_sensor_battery_percent' not in remaining_metrics
+    assert 'ble_sensor_last_update_timestamp_seconds' not in remaining_metrics
+
+
+def test_clear_device_metrics_sets_seen_to_zero():
+    """Test that clearing a device sets its seen gauge to 0."""
+    device_name = "seen_test_device"
+
+    # Set the device as seen
+    update_metrics(device_name, {'temperature': 20.0})
+    assert seen_gauge.labels(device=device_name)._value.get() == 1.0
+
+    # Clear the device
+    clear_device_metrics(device_name)
+
+    # seen_gauge should be 0, and still present in registry
+    assert seen_gauge.labels(device=device_name)._value.get() == 0.0
+
+    # Verify seen_gauge IS still in registry output (as presence indicator)
+    found_seen = False
+    for metric_family in REGISTRY.collect():
+        if metric_family.name == 'ble_sensor_seen':
+            for sample in metric_family.samples:
+                if sample.labels.get('device') == device_name:
+                    found_seen = True
+                    assert sample.value == 0.0
+    assert found_seen, "seen_gauge should still be visible in registry after clear"
+
+
+def test_clear_device_metrics_handles_never_seen_device():
+    """Test that clearing a device that was never seen does not raise an error."""
+    # This should not raise any exception
+    clear_device_metrics("never_existed_device")
+
+    # Verify seen_gauge was set to 0 for this device
+    seen_value = seen_gauge.labels(device="never_existed_device")._value.get()
+    assert seen_value == 0.0

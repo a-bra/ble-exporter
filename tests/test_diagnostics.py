@@ -121,6 +121,8 @@ def test_get_statistics_empty():
     stats = scanner.get_statistics()
 
     assert stats["total_advertisements"] == 0
+    assert stats["successful_parses"] == 0
+    assert stats["failed_parses"] == 0
     assert stats["parse_success_rate"] == 0.0
     assert stats["average_rssi"] == 0.0
     assert stats["service_uuids_seen"] == []

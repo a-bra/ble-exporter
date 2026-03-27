@@ -31,7 +31,7 @@ last_update_gauge = Gauge(
 
 seen_gauge = Gauge(
     'ble_sensor_seen',
-    'Constant value 1 indicating device was seen in latest scan',
+    'Whether device was seen in latest scan (1=seen, 0=not seen)',
     ['device']
 )
 
@@ -60,3 +60,13 @@ def update_metrics(device_name: str, measurements: dict[str, float]) -> None:
     # Always update timestamp and seen indicator
     last_update_gauge.labels(device=device_name).set(time.time())
     seen_gauge.labels(device=device_name).set(1)
+
+
+def clear_device_metrics(device_name: str) -> None:
+    """Remove sensor metrics for a device not seen in the current scan."""
+    for gauge in [temperature_gauge, humidity_gauge, battery_gauge, last_update_gauge]:
+        try:
+            gauge.remove(device_name)
+        except KeyError:
+            pass  # Already removed or never set
+    seen_gauge.labels(device=device_name).set(0)

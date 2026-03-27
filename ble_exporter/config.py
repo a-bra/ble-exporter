@@ -47,6 +47,11 @@ def load_config(path: str) -> AppConfig:
     if missing_keys:
         raise ValueError(f"Missing required config keys: {', '.join(missing_keys)}")
 
+    # Validate integer fields
+    for key in ['scan_interval_seconds', 'scan_duration_seconds', 'listen_port']:
+        if not isinstance(data[key], int):
+            raise ValueError(f"'{key}' must be an integer, got {type(data[key]).__name__}")
+
     # Validate devices is a dict
     if not isinstance(data['devices'], dict):
         raise ValueError("'devices' must be a mapping of MAC addresses to names")

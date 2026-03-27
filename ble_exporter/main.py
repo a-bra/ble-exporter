@@ -9,7 +9,7 @@ from ble_exporter.config import load_config
 from ble_exporter.logger import get_logger
 from ble_exporter.scanner import get_scanner
 from ble_exporter.parser import parse_bthome
-from ble_exporter.metrics import update_metrics
+from ble_exporter.metrics import update_metrics, clear_device_metrics
 from ble_exporter.exporter import create_app, StatusTracker
 
 
@@ -104,13 +104,15 @@ async def scan_loop(scanner, config, status_tracker, logger):
             known_macs = set(config.devices.keys())
             aggregated = aggregate_scan_results(results, known_macs, logger)
 
-            # Update metrics for all devices (already filtered to known MACs)
+            # Update metrics for seen devices, clear metrics for unseen devices
             devices_seen = 0
-            for mac, measurements in aggregated.items():
-                device_name = config.devices[mac]  # Guaranteed to exist
-                update_metrics(device_name, measurements)
-                devices_seen += 1
-                logger.info(f"Updated metrics for {device_name}: {measurements}")
+            for mac, device_name in config.devices.items():
+                if mac in aggregated:
+                    update_metrics(device_name, aggregated[mac])
+                    devices_seen += 1
+                    logger.info(f"Updated metrics for {device_name}: {aggregated[mac]}")
+                else:
+                    clear_device_metrics(device_name)
 
             # Update status tracker with current scan results
             timestamp = int(time.time())

@@ -187,6 +187,8 @@ class DiagnosticScanner:
         if total == 0:
             return {
                 "total_advertisements": 0,
+                "successful_parses": 0,
+                "failed_parses": 0,
                 "parse_success_rate": 0.0,
                 "average_rssi": 0.0,
                 "service_uuids_seen": []

@@ -138,3 +138,57 @@ devices:
 
     with pytest.raises(ValueError, match="'devices' must be a mapping"):
         load_config(str(config_file))
+
+
+def test_config_rejects_non_dict_root(tmp_path):
+    """Test that config rejects non-dictionary YAML (e.g., list or scalar)."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("- item1\n- item2")
+
+    with pytest.raises(ValueError, match="Config file must contain a YAML mapping"):
+        load_config(str(config_file))
+
+
+def test_config_rejects_string_for_scan_interval(tmp_path):
+    """Test that config rejects non-integer scan_interval_seconds."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+scan_interval_seconds: "thirty"
+scan_duration_seconds: 5
+listen_port: 8000
+devices:
+  "A4:C1:38:11:22:33": "test"
+""")
+
+    with pytest.raises(ValueError, match="scan_interval_seconds.*integer"):
+        load_config(str(config_file))
+
+
+def test_config_rejects_string_for_scan_duration(tmp_path):
+    """Test that config rejects non-integer scan_duration_seconds."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+scan_interval_seconds: 30
+scan_duration_seconds: "five"
+listen_port: 8000
+devices:
+  "A4:C1:38:11:22:33": "test"
+""")
+
+    with pytest.raises(ValueError, match="scan_duration_seconds.*integer"):
+        load_config(str(config_file))
+
+
+def test_config_rejects_string_for_listen_port(tmp_path):
+    """Test that config rejects non-integer listen_port."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+scan_interval_seconds: 30
+scan_duration_seconds: 5
+listen_port: "eight thousand"
+devices:
+  "A4:C1:38:11:22:33": "test"
+""")
+
+    with pytest.raises(ValueError, match="listen_port.*integer"):
+        load_config(str(config_file))
