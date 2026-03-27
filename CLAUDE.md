@@ -77,7 +77,7 @@ GitHub Actions workflow runs pytest on Ubuntu with Python 3.10 & 3.11. All tests
 scan_interval_seconds: 30      # Time between scan starts
 scan_duration_seconds: 5       # How long each scan runs
 log_file: "./logs/ble_exporter.log"
-listen_port: 8000
+listen_port: 8183
 devices:
   "A4:C1:38:XX:XX:XX": "living_room"  # MAC -> friendly name mapping
 ```

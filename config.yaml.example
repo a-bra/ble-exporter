@@ -13,7 +13,7 @@ scan_duration_seconds: 5
 log_file: "./logs/ble_exporter.log"
 
 # HTTP server listen port
-listen_port: 8000
+listen_port: 8183
 
 # BLE devices to track
 # Format: "MAC_ADDRESS": "friendly_name"

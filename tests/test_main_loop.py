@@ -541,3 +541,45 @@ async def test_scan_loop_clears_metrics_for_unseen_devices(mock_config, mock_log
 
     # Verify bedroom seen_gauge is 0 (still present as presence indicator)
     assert seen_gauge.labels(device="bedroom")._value._value == 0.0
+
+
+@pytest.mark.asyncio
+async def test_scan_loop_updates_latest_readings(mock_config, mock_logger, status_tracker):
+    """Test that scan loop populates the latest_readings dict after a scan.
+
+    The readings dict should be updated with temperature, humidity, battery,
+    and a last_seen timestamp for each seen device. Unseen devices should
+    keep their previous readings (or remain None).
+    """
+    test_payload = bytes([
+        0x02,  # BTHome v2
+        0x02, 0x66, 0x08,  # Temperature: 21.5°C
+        0x03, 0xBF, 0x28,  # Humidity: 104.31%
+        0x0C, 0xBE, 0x0A,  # Voltage: 2750mV -> 75% battery
+    ])
+
+    scanner = MockScanner(data=[("A4:C1:38:11:22:33", test_payload)])
+
+    # Initialize readings dict with all devices as None (never seen)
+    latest_readings = {"living_room": None, "bedroom": None}
+
+    task = asyncio.create_task(
+        scan_loop(scanner, mock_config, status_tracker, mock_logger,
+                  latest_readings=latest_readings)
+    )
+    await asyncio.sleep(0.1)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    # living_room was seen - should have readings
+    assert latest_readings["living_room"] is not None
+    assert latest_readings["living_room"]["temperature"] == approx(21.5, abs=0.01)
+    assert latest_readings["living_room"]["humidity"] == approx(104.31, abs=0.01)
+    assert latest_readings["living_room"]["battery"] == approx(75.0, abs=0.5)
+    assert "last_seen" in latest_readings["living_room"]
+
+    # bedroom was not seen - should remain None
+    assert latest_readings["bedroom"] is None

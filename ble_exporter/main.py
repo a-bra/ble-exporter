@@ -2,6 +2,7 @@
 # ABOUTME: Wires together scanner, parser, metrics, and HTTP server
 import argparse
 import asyncio
+from datetime import datetime
 import time
 from aiohttp import web
 
@@ -10,7 +11,7 @@ from ble_exporter.logger import get_logger
 from ble_exporter.scanner import get_scanner
 from ble_exporter.parser import parse_bthome
 from ble_exporter.metrics import update_metrics, clear_device_metrics
-from ble_exporter.exporter import create_app, StatusTracker
+from ble_exporter.exporter import create_app, StatusTracker, READINGS_KEY
 
 
 def aggregate_scan_results(
@@ -84,7 +85,7 @@ def aggregate_scan_results(
     return aggregated
 
 
-async def scan_loop(scanner, config, status_tracker, logger):
+async def scan_loop(scanner, config, status_tracker, logger, latest_readings=None):
     """
     Background task that continuously scans for BLE devices, aggregates packets,
     and updates metrics.
@@ -94,6 +95,7 @@ async def scan_loop(scanner, config, status_tracker, logger):
         config: Application configuration
         status_tracker: StatusTracker for updating scan metadata
         logger: Logger instance
+        latest_readings: Optional dict to populate with latest device readings
     """
     while True:
         try:
@@ -106,11 +108,19 @@ async def scan_loop(scanner, config, status_tracker, logger):
 
             # Update metrics for seen devices, clear metrics for unseen devices
             devices_seen = 0
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             for mac, device_name in config.devices.items():
                 if mac in aggregated:
                     update_metrics(device_name, aggregated[mac])
                     devices_seen += 1
                     logger.info(f"Updated metrics for {device_name}: {aggregated[mac]}")
+                    if latest_readings is not None:
+                        latest_readings[device_name] = {
+                            "temperature": aggregated[mac].get("temperature"),
+                            "humidity": aggregated[mac].get("humidity"),
+                            "battery": aggregated[mac].get("battery"),
+                            "last_seen": now,
+                        }
                 else:
                     clear_device_metrics(device_name)
 
@@ -148,10 +158,12 @@ async def start_background_tasks(app):
     config = app['config']
     status_tracker = app['status_tracker']
     logger = app['logger']
+    latest_readings = app[READINGS_KEY]
 
     # Create and store the scan loop task
     app['scan_task'] = asyncio.create_task(
-        scan_loop(scanner, config, status_tracker, logger)
+        scan_loop(scanner, config, status_tracker, logger,
+                  latest_readings=latest_readings)
     )
 
 
@@ -213,6 +225,9 @@ def main():
 
     # Create aiohttp application
     app = create_app(config, status_tracker)
+
+    # Initialize dashboard readings for all configured devices
+    app[READINGS_KEY] = {name: None for name in config.devices.values()}
 
     # Store additional objects needed by background tasks
     app['scanner'] = scanner
