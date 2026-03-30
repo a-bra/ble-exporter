@@ -127,3 +127,4 @@ async def test_dashboard_has_auto_refresh(dashboard_config, status_tracker):
         html = await resp.text()
         assert 'http-equiv="refresh"' in html
         assert 'content="60"' in html
+        assert 'name="viewport"' in html

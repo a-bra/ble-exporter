@@ -89,9 +89,10 @@ async def dashboard_handler(request: web.Request) -> web.Response:
         name = html.escape(device_name)
         if data is None:
             rows.append(
-                f"<tr><td>{name}</td>"
-                "<td>N/A</td><td>N/A</td><td>N/A</td>"
-                "<td>Never</td></tr>"
+                f'<tr><td data-label="Device">{name}</td>'
+                '<td data-label="Temp">N/A</td><td data-label="Humidity">N/A</td>'
+                '<td data-label="Battery">N/A</td>'
+                '<td data-label="Last Seen">Never</td></tr>'
             )
         else:
             temp = f"{data['temperature']:.1f}" if data.get('temperature') is not None else "N/A"
@@ -99,9 +100,10 @@ async def dashboard_handler(request: web.Request) -> web.Response:
             bat = f"{data['battery']:.0f}" if data.get('battery') is not None else "N/A"
             last_seen = html.escape(data.get('last_seen', 'N/A'))
             rows.append(
-                f"<tr><td>{name}</td>"
-                f"<td>{temp}</td><td>{hum}</td><td>{bat}</td>"
-                f"<td>{last_seen}</td></tr>"
+                f'<tr><td data-label="Device">{name}</td>'
+                f'<td data-label="Temp">{temp}</td><td data-label="Humidity">{hum}</td>'
+                f'<td data-label="Battery">{bat}</td>'
+                f'<td data-label="Last Seen">{last_seen}</td></tr>'
             )
 
     table_rows = "\n".join(rows)
@@ -110,6 +112,7 @@ async def dashboard_handler(request: web.Request) -> web.Response:
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="refresh" content="60">
 <title>BLE Sensors</title>
 <style>
@@ -120,6 +123,19 @@ async def dashboard_handler(request: web.Request) -> web.Response:
   th {{ background: #4a90d9; color: #fff; }}
   tr:nth-child(even) {{ background: #f9f9f9; }}
   tr:hover {{ background: #e9e9e9; }}
+  @media (max-width: 600px) {{
+    body {{ margin: 1rem; }}
+    table, thead, tbody, tr, th, td {{ display: block; }}
+    thead {{ display: none; }}
+    tr {{ margin-bottom: 1rem; background: #fff; border-radius: 8px;
+         box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 0.5rem 0; }}
+    td {{ padding: 0.4rem 1rem; border-bottom: none;
+         display: flex; justify-content: space-between; }}
+    td::before {{ content: attr(data-label); font-weight: 600; color: #555; }}
+    td:first-child {{ background: #4a90d9; color: #fff; border-radius: 8px 8px 0 0;
+                      font-weight: 600; display: block; padding: 0.6rem 1rem; }}
+    td:first-child::before {{ display: none; }}
+  }}
 </style>
 </head>
 <body>
