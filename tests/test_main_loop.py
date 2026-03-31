@@ -547,9 +547,9 @@ async def test_scan_loop_clears_metrics_for_unseen_devices(mock_config, mock_log
 async def test_scan_loop_updates_latest_readings(mock_config, mock_logger, status_tracker):
     """Test that scan loop populates the latest_readings dict after a scan.
 
-    The readings dict should be updated with temperature, humidity, battery,
-    and a last_seen timestamp for each seen device. Unseen devices should
-    keep their previous readings (or remain None).
+    The readings dict should be updated with temperature, humidity, and a
+    last_seen timestamp for each seen device. Unseen devices should keep
+    their previous readings (or remain None).
     """
     test_payload = bytes([
         0x02,  # BTHome v2
@@ -578,8 +578,49 @@ async def test_scan_loop_updates_latest_readings(mock_config, mock_logger, statu
     assert latest_readings["living_room"] is not None
     assert latest_readings["living_room"]["temperature"] == approx(21.5, abs=0.01)
     assert latest_readings["living_room"]["humidity"] == approx(104.31, abs=0.01)
-    assert latest_readings["living_room"]["battery"] == approx(75.0, abs=0.5)
     assert "last_seen" in latest_readings["living_room"]
 
     # bedroom was not seen - should remain None
     assert latest_readings["bedroom"] is None
+
+
+@pytest.mark.asyncio
+async def test_scan_loop_battery_only_does_not_overwrite_readings(mock_config, mock_logger, status_tracker):
+    """Test that a battery-only scan does not overwrite existing dashboard readings.
+
+    When the scan window only captures a voltage/battery packet (no temp/humidity),
+    the latest_readings dict should keep the previous values intact.
+    """
+    # Battery-only packet (voltage object, no temp or humidity)
+    battery_payload = bytes([
+        0x02,  # BTHome v2
+        0x0C, 0xBE, 0x0A,  # Voltage: 2750mV -> 75% battery
+    ])
+
+    scanner = MockScanner(data=[("A4:C1:38:11:22:33", battery_payload)])
+
+    # Pre-populate with previous good readings
+    latest_readings = {
+        "living_room": {
+            "temperature": 21.5,
+            "humidity": 65.0,
+            "last_seen": "2026-03-28 14:00:00",
+        },
+        "bedroom": None,
+    }
+
+    task = asyncio.create_task(
+        scan_loop(scanner, mock_config, status_tracker, mock_logger,
+                  latest_readings=latest_readings)
+    )
+    await asyncio.sleep(0.1)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    # living_room was seen but only battery - readings should be unchanged
+    assert latest_readings["living_room"]["temperature"] == approx(21.5, abs=0.01)
+    assert latest_readings["living_room"]["humidity"] == approx(65.0, abs=0.01)
+    assert latest_readings["living_room"]["last_seen"] == "2026-03-28 14:00:00"

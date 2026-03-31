@@ -68,18 +68,16 @@ async def test_dashboard_shows_device_names(dashboard_config, status_tracker):
 
 @pytest.mark.asyncio
 async def test_dashboard_shows_readings(dashboard_config, status_tracker):
-    """Dashboard should display temperature, humidity, battery, and timestamp."""
+    """Dashboard should display temperature, humidity, and timestamp."""
     readings = {
         "living_room": {
             "temperature": 21.5,
             "humidity": 65.3,
-            "battery": 89.0,
             "last_seen": "2026-03-28 14:30:05",
         },
         "bedroom": {
             "temperature": 18.2,
             "humidity": 55.0,
-            "battery": 72.0,
             "last_seen": "2026-03-28 14:30:05",
         },
     }
@@ -90,7 +88,6 @@ async def test_dashboard_shows_readings(dashboard_config, status_tracker):
         html = await resp.text()
         assert '21.5' in html
         assert '65.3' in html
-        assert '>89<' in html  # battery rendered as integer
         assert '18.2' in html
         assert '2026-03-28 14:30:05' in html
 
@@ -102,7 +99,6 @@ async def test_dashboard_shows_never_for_unseen_devices(dashboard_config, status
         "living_room": {
             "temperature": 21.5,
             "humidity": 65.3,
-            "battery": 89.0,
             "last_seen": "2026-03-28 14:30:05",
         },
         "bedroom": None,

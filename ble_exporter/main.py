@@ -114,11 +114,13 @@ async def scan_loop(scanner, config, status_tracker, logger, latest_readings=Non
                     update_metrics(device_name, aggregated[mac])
                     devices_seen += 1
                     logger.info(f"Updated metrics for {device_name}: {aggregated[mac]}")
-                    if latest_readings is not None:
+                    if latest_readings is not None and (
+                        "temperature" in aggregated[mac]
+                        or "humidity" in aggregated[mac]
+                    ):
                         latest_readings[device_name] = {
                             "temperature": aggregated[mac].get("temperature"),
                             "humidity": aggregated[mac].get("humidity"),
-                            "battery": aggregated[mac].get("battery"),
                             "last_seen": now,
                         }
                 else:

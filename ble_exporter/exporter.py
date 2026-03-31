@@ -91,18 +91,15 @@ async def dashboard_handler(request: web.Request) -> web.Response:
             rows.append(
                 f'<tr><td data-label="Device">{name}</td>'
                 '<td data-label="Temp">N/A</td><td data-label="Humidity">N/A</td>'
-                '<td data-label="Battery">N/A</td>'
                 '<td data-label="Last Seen">Never</td></tr>'
             )
         else:
             temp = f"{data['temperature']:.1f}" if data.get('temperature') is not None else "N/A"
             hum = f"{data['humidity']:.1f}" if data.get('humidity') is not None else "N/A"
-            bat = f"{data['battery']:.0f}" if data.get('battery') is not None else "N/A"
             last_seen = html.escape(data.get('last_seen', 'N/A'))
             rows.append(
                 f'<tr><td data-label="Device">{name}</td>'
                 f'<td data-label="Temp">{temp}</td><td data-label="Humidity">{hum}</td>'
-                f'<td data-label="Battery">{bat}</td>'
                 f'<td data-label="Last Seen">{last_seen}</td></tr>'
             )
 
@@ -141,7 +138,7 @@ async def dashboard_handler(request: web.Request) -> web.Response:
 <body>
 <h1>BLE Sensors</h1>
 <table>
-<tr><th>Device</th><th>Temp (&deg;C)</th><th>Humidity (%)</th><th>Battery (%)</th><th>Last Seen</th></tr>
+<tr><th>Device</th><th>Temp (&deg;C)</th><th>Humidity (%)</th><th>Last Seen</th></tr>
 {table_rows}
 </table>
 </body>
