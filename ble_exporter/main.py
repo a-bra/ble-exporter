@@ -6,29 +6,29 @@ from datetime import datetime
 import time
 from aiohttp import web
 
-from ble_exporter.config import load_config
+from ble_exporter.config import load_config, DeviceConfig
 from ble_exporter.logger import get_logger
 from ble_exporter.scanner import get_scanner
-from ble_exporter.parser import parse_bthome
+from ble_exporter.parser import parse_bthome, decrypt_bthome
 from ble_exporter.metrics import update_metrics, clear_device_metrics
 from ble_exporter.exporter import create_app, StatusTracker, READINGS_KEY
 
 
 def aggregate_scan_results(
     scan_results: list[tuple[str, bytes]],
-    known_macs: set[str],
+    devices: dict[str, DeviceConfig],
     logger
 ) -> dict[str, dict[str, float]]:
     """
     Aggregate measurements by MAC address within a scan period.
 
-    Groups all packets by MAC address, parses each packet, and merges
-    measurements. This handles sensors that alternate between sending
-    temperature/humidity packets and battery packets.
+    Groups all packets by MAC address, decrypts if needed, parses each
+    packet, and merges measurements. This handles sensors that alternate
+    between sending temperature/humidity packets and battery packets.
 
     Args:
         scan_results: List of (mac_address, payload) tuples from scanner
-        known_macs: Set of MAC addresses from config (for warning detection)
+        devices: Device config mapping (MAC -> DeviceConfig with optional bindkey)
         logger: Logger instance for warnings
 
     Returns:
@@ -37,10 +37,14 @@ def aggregate_scan_results(
 
     Behavior:
         - Filters to only known MACs (early optimization)
+        - Decrypts encrypted frames when device has a bindkey
+        - Warns if encrypted frame received from device without bindkey
         - Silently skips unparseable packets
         - Last value wins for duplicate measurements
         - Warns if known MAC seen but ALL packets fail to parse
     """
+    known_macs = set(devices.keys())
+
     # Group packets by MAC address
     packets_by_mac: dict[str, list[bytes]] = {}
     for mac, payload in scan_results:
@@ -59,17 +63,29 @@ def aggregate_scan_results(
 
     for mac, payloads in packets_by_mac.items():
         merged_measurements = {}
+        device_cfg = devices[mac]
 
         for payload in payloads:
+            if not payload:
+                continue
             try:
+                # Encrypted frame from device without bindkey
+                if (payload[0] & 0x01) and not device_cfg.encrypted:
+                    logger.warning(
+                        f"Device {mac} ({device_cfg.name}) sent encrypted frame "
+                        f"but no bindkey is configured. "
+                        f"Add a bindkey to decrypt this device's data."
+                    )
+                    continue
+
+                if device_cfg.encrypted:
+                    payload = decrypt_bthome(payload, mac, device_cfg.bindkey)
+
                 measurements = parse_bthome(payload)
-                # Merge measurements (last value wins for duplicates)
                 merged_measurements.update(measurements)
             except ValueError:
-                # Silently skip unparseable packets
                 pass
 
-        # Only include MAC if at least one packet parsed successfully
         if merged_measurements:
             aggregated[mac] = merged_measurements
             successful_macs.add(mac)
@@ -103,28 +119,29 @@ async def scan_loop(scanner, config, status_tracker, logger, latest_readings=Non
             results = await scanner.scan(config.scan_duration_seconds)
 
             # Aggregate measurements by MAC address (handles alternating packets)
-            known_macs = set(config.devices.keys())
-            aggregated = aggregate_scan_results(results, known_macs, logger)
+            aggregated = aggregate_scan_results(results, config.devices, logger)
 
             # Update metrics for seen devices, clear metrics for unseen devices
             devices_seen = 0
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            for mac, device_name in config.devices.items():
+            for mac, device_cfg in config.devices.items():
                 if mac in aggregated:
-                    update_metrics(device_name, aggregated[mac])
+                    update_metrics(device_cfg.name, aggregated[mac])
                     devices_seen += 1
-                    logger.info(f"Updated metrics for {device_name}: {aggregated[mac]}")
+                    enc_tag = " [encrypted]" if device_cfg.encrypted else ""
+                    logger.info(f"Updated metrics for {device_cfg.name}{enc_tag}: {aggregated[mac]}")
                     if latest_readings is not None and (
                         "temperature" in aggregated[mac]
                         or "humidity" in aggregated[mac]
                     ):
-                        latest_readings[device_name] = {
+                        latest_readings[device_cfg.name] = {
                             "temperature": aggregated[mac].get("temperature"),
                             "humidity": aggregated[mac].get("humidity"),
                             "last_seen": now,
+                            "encrypted": device_cfg.encrypted,
                         }
                 else:
-                    clear_device_metrics(device_name)
+                    clear_device_metrics(device_cfg.name)
 
             # Update status tracker with current scan results
             timestamp = int(time.time())
@@ -229,7 +246,7 @@ def main():
     app = create_app(config, status_tracker)
 
     # Initialize dashboard readings for all configured devices
-    app[READINGS_KEY] = {name: None for name in config.devices.values()}
+    app[READINGS_KEY] = {dc.name: None for dc in config.devices.values()}
 
     # Store additional objects needed by background tasks
     app['scanner'] = scanner

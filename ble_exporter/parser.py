@@ -1,6 +1,53 @@
-# ABOUTME: BTHome packet parser for BLE advertisements
+# ABOUTME: BTHome packet parser and decryptor for BLE advertisements
 # ABOUTME: Decodes temperature, humidity, and battery from BTHome format packets
 import struct
+
+from cryptography.hazmat.primitives.ciphers.aead import AESCCM
+
+
+def decrypt_bthome(payload: bytes, mac: str, bindkey: str) -> bytes:
+    """
+    Decrypt an encrypted BTHome v2 advertisement frame.
+
+    If the frame is not encrypted (device_info encryption bit clear),
+    returns the payload unchanged.
+
+    Args:
+        payload: Raw BTHome frame bytes (device_info + ciphertext + counter + mic)
+        mac: Device MAC address in "AA:BB:CC:DD:EE:FF" format
+        bindkey: 32-character hex string (16-byte AES key)
+
+    Returns:
+        Decrypted BTHome frame with synthetic unencrypted device_info byte (0x40)
+
+    Raises:
+        ValueError: If frame is too short or decryption fails (wrong key/corrupted)
+    """
+    device_info = payload[0]
+
+    if not (device_info & 0x01):
+        return payload
+
+    # Frame: device_info(1) || ciphertext(N) || counter(4 LE) || mic(4)
+    if len(payload) < 10:
+        raise ValueError("Encrypted BTHome frame too short (need device_info + counter + mic + data)")
+
+    counter_bytes = payload[-8:-4]
+    mic = payload[-4:]
+    ciphertext = payload[1:-8]
+
+    mac_bytes = bytes(int(b, 16) for b in mac.split(':'))
+    nonce = mac_bytes + b'\xD2\xFC' + bytes([device_info]) + counter_bytes
+
+    key = bytes.fromhex(bindkey)
+    aesccm = AESCCM(key, tag_length=4)
+
+    try:
+        plaintext = aesccm.decrypt(nonce, ciphertext + mic, b"")
+    except Exception as e:
+        raise ValueError(f"Decryption failed for {mac}: {e}") from e
+
+    return bytes([0x40]) + plaintext
 
 
 def parse_bthome(payload: bytes) -> dict[str, float]:

@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from ble_exporter.config import AppConfig
+from ble_exporter.config import AppConfig, DeviceConfig
 from ble_exporter.logger import get_logger
 
 
@@ -15,7 +15,7 @@ def test_logger_creates_log_file(tmp_path):
         scan_interval_seconds=30,
         scan_duration_seconds=5,
         listen_port=8000,
-        devices={"AA:BB:CC:DD:EE:FF": "test_device"},
+        devices={"AA:BB:CC:DD:EE:FF": DeviceConfig(name="test_device")},
         log_file=str(log_file)
     )
 
@@ -37,7 +37,7 @@ def test_logger_writes_message(tmp_path):
         scan_interval_seconds=30,
         scan_duration_seconds=5,
         listen_port=8000,
-        devices={"AA:BB:CC:DD:EE:FF": "test_device"},
+        devices={"AA:BB:CC:DD:EE:FF": DeviceConfig(name="test_device")},
         log_file=str(log_file)
     )
 
@@ -66,7 +66,7 @@ def test_logger_has_single_handler(tmp_path):
         scan_interval_seconds=30,
         scan_duration_seconds=5,
         listen_port=8000,
-        devices={"AA:BB:CC:DD:EE:FF": "test_device"},
+        devices={"AA:BB:CC:DD:EE:FF": DeviceConfig(name="test_device")},
         log_file=str(log_file)
     )
 
@@ -87,7 +87,7 @@ def test_logger_reuses_existing_handlers(tmp_path):
         scan_interval_seconds=30,
         scan_duration_seconds=5,
         listen_port=8000,
-        devices={"AA:BB:CC:DD:EE:FF": "test_device"},
+        devices={"AA:BB:CC:DD:EE:FF": DeviceConfig(name="test_device")},
         log_file=str(log_file)
     )
 
@@ -112,7 +112,7 @@ def test_logger_creates_parent_directories(tmp_path):
         scan_interval_seconds=30,
         scan_duration_seconds=5,
         listen_port=8000,
-        devices={"AA:BB:CC:DD:EE:FF": "test_device"},
+        devices={"AA:BB:CC:DD:EE:FF": DeviceConfig(name="test_device")},
         log_file=str(log_file)
     )
 
@@ -135,7 +135,7 @@ def test_logger_level_is_info(tmp_path):
         scan_interval_seconds=30,
         scan_duration_seconds=5,
         listen_port=8000,
-        devices={"AA:BB:CC:DD:EE:FF": "test_device"},
+        devices={"AA:BB:CC:DD:EE:FF": DeviceConfig(name="test_device")},
         log_file=str(log_file)
     )
 

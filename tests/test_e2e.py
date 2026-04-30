@@ -10,7 +10,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from pytest import approx
 
-from ble_exporter.config import AppConfig
+from ble_exporter.config import AppConfig, DeviceConfig
 from ble_exporter.scanner import MockScanner
 from ble_exporter.exporter import create_app, StatusTracker, READINGS_KEY
 from ble_exporter.main import scan_loop, start_background_tasks, cleanup_background_tasks
@@ -24,8 +24,8 @@ def e2e_config():
         scan_duration_seconds=1,
         listen_port=8000,
         devices={
-            "A4:C1:38:11:22:33": "test_sensor_1",
-            "A4:C1:38:44:55:66": "test_sensor_2",
+            "A4:C1:38:11:22:33": DeviceConfig(name="test_sensor_1"),
+            "A4:C1:38:44:55:66": DeviceConfig(name="test_sensor_2"),
         },
         log_file="/tmp/test_e2e.log"
     )
@@ -86,7 +86,7 @@ async def test_e2e_full_application_flow(e2e_config, mock_logger):
     app['config'] = e2e_config
     app['status_tracker'] = status_tracker
     app['logger'] = mock_logger
-    app[READINGS_KEY] = {name: None for name in e2e_config.devices.values()}
+    app[READINGS_KEY] = {dc.name: None for dc in e2e_config.devices.values()}
 
     # Start background tasks
     await start_background_tasks(app)
@@ -156,7 +156,7 @@ async def test_e2e_metrics_update_over_time(e2e_config, mock_logger):
     app['config'] = e2e_config
     app['status_tracker'] = status_tracker
     app['logger'] = mock_logger
-    app[READINGS_KEY] = {name: None for name in e2e_config.devices.values()}
+    app[READINGS_KEY] = {dc.name: None for dc in e2e_config.devices.values()}
 
     await start_background_tasks(app)
 
@@ -199,7 +199,7 @@ async def test_e2e_no_devices_seen(e2e_config, mock_logger):
     app['config'] = e2e_config
     app['status_tracker'] = status_tracker
     app['logger'] = mock_logger
-    app[READINGS_KEY] = {name: None for name in e2e_config.devices.values()}
+    app[READINGS_KEY] = {dc.name: None for dc in e2e_config.devices.values()}
 
     await start_background_tasks(app)
     await asyncio.sleep(0.3)
@@ -244,7 +244,7 @@ async def test_e2e_unknown_device_ignored(e2e_config, mock_logger):
     app['config'] = e2e_config
     app['status_tracker'] = status_tracker
     app['logger'] = mock_logger
-    app[READINGS_KEY] = {name: None for name in e2e_config.devices.values()}
+    app[READINGS_KEY] = {dc.name: None for dc in e2e_config.devices.values()}
 
     await start_background_tasks(app)
     await asyncio.sleep(0.3)
@@ -276,7 +276,7 @@ async def test_e2e_concurrent_requests(e2e_config, mock_logger):
     app['config'] = e2e_config
     app['status_tracker'] = status_tracker
     app['logger'] = mock_logger
-    app[READINGS_KEY] = {name: None for name in e2e_config.devices.values()}
+    app[READINGS_KEY] = {dc.name: None for dc in e2e_config.devices.values()}
 
     await start_background_tasks(app)
     await asyncio.sleep(0.3)
@@ -329,7 +329,7 @@ async def test_e2e_dashboard_after_scan(e2e_config, mock_logger):
     app['config'] = e2e_config
     app['status_tracker'] = status_tracker
     app['logger'] = mock_logger
-    app[READINGS_KEY] = {name: None for name in e2e_config.devices.values()}
+    app[READINGS_KEY] = {dc.name: None for dc in e2e_config.devices.values()}
 
     await start_background_tasks(app)
     await asyncio.sleep(0.5)

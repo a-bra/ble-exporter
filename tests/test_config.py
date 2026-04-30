@@ -3,7 +3,7 @@
 import pytest
 from pathlib import Path
 
-from ble_exporter.config import load_config, AppConfig
+from ble_exporter.config import load_config, AppConfig, DeviceConfig
 
 
 def test_load_valid_config(tmp_path):
@@ -26,8 +26,8 @@ devices:
     assert config.listen_port == 8000
     assert config.log_file == "./logs/ble_exporter.log"
     assert config.devices == {
-        "A4:C1:38:11:22:33": "living_room",
-        "A4:C1:38:44:55:66": "bedroom"
+        "A4:C1:38:11:22:33": DeviceConfig(name="living_room"),
+        "A4:C1:38:44:55:66": DeviceConfig(name="bedroom"),
     }
 
 
@@ -191,4 +191,144 @@ devices:
 """)
 
     with pytest.raises(ValueError, match="listen_port.*integer"):
+        load_config(str(config_file))
+
+
+# --- DeviceConfig and encrypted device tests ---
+
+
+def test_device_config_plain():
+    """Test DeviceConfig creation for unencrypted device."""
+    dc = DeviceConfig(name="living_room")
+    assert dc.name == "living_room"
+    assert dc.bindkey is None
+    assert dc.encrypted is False
+
+
+def test_device_config_encrypted():
+    """Test DeviceConfig creation for encrypted device with bindkey."""
+    dc = DeviceConfig(name="bedroom", bindkey="aabbccdd11223344aabbccdd11223344")
+    assert dc.name == "bedroom"
+    assert dc.bindkey == "aabbccdd11223344aabbccdd11223344"
+    assert dc.encrypted is True
+
+
+def test_load_config_with_mixed_devices(tmp_path):
+    """Test loading config with both plain string and dict-style device entries."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+scan_interval_seconds: 30
+scan_duration_seconds: 5
+listen_port: 8000
+devices:
+  "A4:C1:38:11:22:33": "living_room"
+  "A4:C1:38:44:55:66":
+    name: "bedroom"
+    bindkey: "aabbccdd11223344aabbccdd11223344"
+""")
+
+    config = load_config(str(config_file))
+
+    # Plain device normalized to DeviceConfig
+    dc_plain = config.devices["A4:C1:38:11:22:33"]
+    assert isinstance(dc_plain, DeviceConfig)
+    assert dc_plain.name == "living_room"
+    assert dc_plain.bindkey is None
+    assert dc_plain.encrypted is False
+
+    # Encrypted device parsed correctly
+    dc_enc = config.devices["A4:C1:38:44:55:66"]
+    assert isinstance(dc_enc, DeviceConfig)
+    assert dc_enc.name == "bedroom"
+    assert dc_enc.bindkey == "aabbccdd11223344aabbccdd11223344"
+    assert dc_enc.encrypted is True
+
+
+def test_load_config_all_plain_devices_still_works(tmp_path):
+    """Test that existing plain-string-only configs still load correctly."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+scan_interval_seconds: 30
+scan_duration_seconds: 5
+listen_port: 8000
+devices:
+  "A4:C1:38:11:22:33": "living_room"
+  "A4:C1:38:44:55:66": "bedroom"
+""")
+
+    config = load_config(str(config_file))
+
+    for mac in config.devices:
+        dc = config.devices[mac]
+        assert isinstance(dc, DeviceConfig)
+        assert dc.bindkey is None
+        assert dc.encrypted is False
+
+    assert config.devices["A4:C1:38:11:22:33"].name == "living_room"
+    assert config.devices["A4:C1:38:44:55:66"].name == "bedroom"
+
+
+def test_load_config_encrypted_device_missing_name(tmp_path):
+    """Test that dict-style device entry without 'name' raises ValueError."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+scan_interval_seconds: 30
+scan_duration_seconds: 5
+listen_port: 8000
+devices:
+  "A4:C1:38:11:22:33":
+    bindkey: "aabbccdd11223344aabbccdd11223344"
+""")
+
+    with pytest.raises(ValueError, match="missing.*name"):
+        load_config(str(config_file))
+
+
+def test_load_config_encrypted_device_missing_bindkey(tmp_path):
+    """Test that dict-style device entry without 'bindkey' raises ValueError."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+scan_interval_seconds: 30
+scan_duration_seconds: 5
+listen_port: 8000
+devices:
+  "A4:C1:38:11:22:33":
+    name: "bedroom"
+""")
+
+    with pytest.raises(ValueError, match="missing.*bindkey"):
+        load_config(str(config_file))
+
+
+def test_load_config_rejects_invalid_bindkey_length(tmp_path):
+    """Test that bindkey must be exactly 32 hex characters (16 bytes)."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+scan_interval_seconds: 30
+scan_duration_seconds: 5
+listen_port: 8000
+devices:
+  "A4:C1:38:11:22:33":
+    name: "bedroom"
+    bindkey: "aabbccdd"
+""")
+
+    with pytest.raises(ValueError, match="bindkey.*32 hex"):
+        load_config(str(config_file))
+
+
+def test_load_config_rejects_non_hex_bindkey(tmp_path):
+    """Test that bindkey must be valid hexadecimal."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("""
+scan_interval_seconds: 30
+scan_duration_seconds: 5
+listen_port: 8000
+devices:
+  "A4:C1:38:11:22:33":
+    name: "bedroom"
+    bindkey: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+""")
+
+    with pytest.raises(ValueError, match="bindkey.*hex"):
         load_config(str(config_file))

@@ -10,7 +10,7 @@ from pytest import approx
 
 from ble_exporter.main import scan_loop
 from ble_exporter.scanner import MockScanner
-from ble_exporter.config import AppConfig
+from ble_exporter.config import AppConfig, DeviceConfig
 from ble_exporter.exporter import StatusTracker
 from ble_exporter.metrics import (
     update_metrics,
@@ -31,8 +31,8 @@ def mock_config():
         scan_duration_seconds=5,
         listen_port=8000,
         devices={
-            "A4:C1:38:11:22:33": "living_room",
-            "A4:C1:38:44:55:66": "bedroom",
+            "A4:C1:38:11:22:33": DeviceConfig(name="living_room"),
+            "A4:C1:38:44:55:66": DeviceConfig(name="bedroom"),
         },
         log_file="/tmp/test.log"
     )

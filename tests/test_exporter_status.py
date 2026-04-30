@@ -4,7 +4,7 @@ import pytest
 import json
 from aiohttp.test_utils import TestClient, TestServer
 
-from ble_exporter.config import AppConfig
+from ble_exporter.config import AppConfig, DeviceConfig
 from ble_exporter.exporter import create_app, StatusTracker
 
 
@@ -15,7 +15,7 @@ def test_config():
         scan_interval_seconds=30,
         scan_duration_seconds=5,
         listen_port=8000,
-        devices={"AA:BB:CC:DD:EE:FF": "test_device"},
+        devices={"AA:BB:CC:DD:EE:FF": DeviceConfig(name="test_device")},
         log_file="./logs/test.log"
     )
 

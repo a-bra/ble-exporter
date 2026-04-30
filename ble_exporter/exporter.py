@@ -87,6 +87,7 @@ async def dashboard_handler(request: web.Request) -> web.Response:
     rows = []
     for device_name, data in sorted(readings.items()):
         name = html.escape(device_name)
+        lock = ' <span class="lock-icon">&#x1F512;</span>' if data and data.get('encrypted') else ''
         if data is None:
             rows.append(
                 f'<tr><td data-label="Device">{name}</td>'
@@ -98,7 +99,7 @@ async def dashboard_handler(request: web.Request) -> web.Response:
             hum = f"{data['humidity']:.1f}" if data.get('humidity') is not None else "N/A"
             last_seen = html.escape(data.get('last_seen', 'N/A'))
             rows.append(
-                f'<tr><td data-label="Device">{name}</td>'
+                f'<tr><td data-label="Device">{name}{lock}</td>'
                 f'<td data-label="Temp">{temp}</td><td data-label="Humidity">{hum}</td>'
                 f'<td data-label="Last Seen">{last_seen}</td></tr>'
             )
@@ -120,6 +121,7 @@ async def dashboard_handler(request: web.Request) -> web.Response:
   th {{ background: #4a90d9; color: #fff; }}
   tr:nth-child(even) {{ background: #f9f9f9; }}
   tr:hover {{ background: #e9e9e9; }}
+  .lock-icon {{ font-size: 0.8em; opacity: 0.7; margin-left: 0.3em; }}
   @media (max-width: 600px) {{
     body {{ margin: 1rem; }}
     table, thead, tbody, tr, th, td {{ display: block; }}

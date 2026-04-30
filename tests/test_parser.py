@@ -1,9 +1,11 @@
 # ABOUTME: Unit tests for BTHome packet parser
 # ABOUTME: Tests temperature, humidity, battery decoding and error handling
+import struct
 import pytest
 from pytest import approx
+from cryptography.hazmat.primitives.ciphers.aead import AESCCM
 
-from ble_exporter.parser import parse_bthome
+from ble_exporter.parser import parse_bthome, decrypt_bthome
 
 
 def test_parse_complete_packet():
@@ -314,3 +316,98 @@ def test_parse_with_completely_unknown_object_id():
 
     assert 'temperature' in result
     assert result['temperature'] == approx(21.5, abs=0.01)
+
+
+# --- BTHome decryption tests ---
+
+SYNTH_MAC = "AA:BB:CC:DD:EE:FF"
+SYNTH_BINDKEY = "11223344556677889900aabbccddeeff"
+DEVICE_INFO_ENCRYPTED = 0x41
+
+
+def _build_encrypted_frame(plaintext: bytes, mac: str, bindkey_hex: str, counter: int) -> bytes:
+    """Helper: encrypt plaintext BTHome objects into a full encrypted frame.
+
+    Frame layout: device_info(1) || ciphertext(N) || counter(4 LE) || mic(4)
+    """
+    key = bytes.fromhex(bindkey_hex)
+    device_info = bytes([DEVICE_INFO_ENCRYPTED])
+    counter_bytes = struct.pack('<I', counter)
+
+    mac_bytes = bytes(int(b, 16) for b in mac.split(':'))
+    nonce = mac_bytes + b'\xD2\xFC' + device_info + counter_bytes  # 13 bytes
+
+    aesccm = AESCCM(key, tag_length=4)
+    ciphertext_and_mic = aesccm.encrypt(nonce, plaintext, b"")
+    ciphertext = ciphertext_and_mic[:-4]
+    mic = ciphertext_and_mic[-4:]
+
+    return device_info + ciphertext + counter_bytes + mic
+
+
+def test_decrypt_bthome_temperature():
+    """Test decrypting an encrypted BTHome frame with temperature data."""
+    plaintext = bytes([0x02, 0x66, 0x08])  # Temperature: 21.5°C
+    frame = _build_encrypted_frame(plaintext, SYNTH_MAC, SYNTH_BINDKEY, counter=1)
+
+    decrypted = decrypt_bthome(frame, SYNTH_MAC, SYNTH_BINDKEY)
+
+    # Should return synthetic unencrypted frame: 0x40 + plaintext
+    assert decrypted[0] == 0x40
+    result = parse_bthome(decrypted)
+    assert result['temperature'] == approx(21.5, abs=0.01)
+
+
+def test_decrypt_bthome_full_packet():
+    """Test decrypting encrypted frame with temp + humidity + voltage."""
+    plaintext = bytes([
+        0x02, 0x66, 0x08,  # Temperature: 21.5°C
+        0x03, 0x8C, 0x19,  # Humidity: 65.4%
+        0x0C, 0x50, 0x0B,  # Voltage: 2896mV
+    ])
+    frame = _build_encrypted_frame(plaintext, SYNTH_MAC, SYNTH_BINDKEY, counter=42)
+
+    decrypted = decrypt_bthome(frame, SYNTH_MAC, SYNTH_BINDKEY)
+    result = parse_bthome(decrypted)
+
+    assert result['temperature'] == approx(21.5, abs=0.01)
+    assert result['humidity'] == approx(65.4, abs=0.01)
+    assert result['battery'] == approx(89.6, abs=0.5)
+
+
+def test_decrypt_bthome_wrong_bindkey():
+    """Test that decryption with wrong bindkey raises ValueError."""
+    plaintext = bytes([0x02, 0x66, 0x08])
+    frame = _build_encrypted_frame(plaintext, SYNTH_MAC, SYNTH_BINDKEY, counter=1)
+
+    wrong_key = "ffeeddccbbaa00998877665544332211"
+    with pytest.raises(ValueError, match="[Dd]ecryption failed"):
+        decrypt_bthome(frame, SYNTH_MAC, wrong_key)
+
+
+def test_decrypt_bthome_unencrypted_passthrough():
+    """Test that unencrypted frames (device_info bit 0 clear) pass through unchanged."""
+    unencrypted = bytes([0x40, 0x02, 0x66, 0x08])  # Normal unencrypted frame
+
+    result = decrypt_bthome(unencrypted, SYNTH_MAC, SYNTH_BINDKEY)
+    assert result == unencrypted
+
+
+def test_decrypt_bthome_various_counters():
+    """Test decryption works with different counter values."""
+    plaintext = bytes([0x02, 0x00, 0x0A])  # Temperature: 25.6°C
+
+    for counter in [0, 1, 255, 65535, 0xFFFFFFFF]:
+        frame = _build_encrypted_frame(plaintext, SYNTH_MAC, SYNTH_BINDKEY, counter=counter)
+        decrypted = decrypt_bthome(frame, SYNTH_MAC, SYNTH_BINDKEY)
+        result = parse_bthome(decrypted)
+        assert result['temperature'] == approx(25.6, abs=0.01)
+
+
+def test_decrypt_bthome_frame_too_short():
+    """Test that frames too short to contain counter+mic raise ValueError."""
+    # Encrypted device_info + only 3 bytes (need at least 8: counter(4) + mic(4))
+    short_frame = bytes([0x41, 0xAA, 0xBB, 0xCC])
+
+    with pytest.raises(ValueError, match="too short"):
+        decrypt_bthome(short_frame, SYNTH_MAC, SYNTH_BINDKEY)

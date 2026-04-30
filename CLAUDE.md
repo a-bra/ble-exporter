@@ -33,20 +33,21 @@ pytest -k "test_name"      # Run specific test by name
 The project follows a layered architecture with clear separation of concerns:
 
 ### Core Components
-- **config.py**: YAML config parser with dataclass validation. Single source of truth for application configuration.
+- **config.py**: YAML config parser with dataclass validation. Supports both plain (MAC→name) and encrypted (MAC→{name, bindkey}) device entries via `DeviceConfig`.
 - **logger.py**: File-only logging setup using RotatingFileHandler. No stdout logging - logs to file path specified in config.
 - **scanner.py**: BLE scanning abstraction with `AbstractScanner` protocol. `BleakScannerImpl` for hardware, `MockScanner` for testing/CI. Returns list of `(mac_address, payload_bytes)` tuples.
-- **parser.py**: BTHome packet decoder. Extracts temperature (0x02), humidity (0x03), battery (0x0A) from binary advertisement payloads.
+- **parser.py**: BTHome packet decoder and decryptor. `decrypt_bthome()` handles AES-CCM decryption for encrypted BTHome v2 frames. `parse_bthome()` extracts temperature (0x02), humidity (0x03), battery (0x0A) from binary advertisement payloads.
 - **metrics.py**: Prometheus metric registration and update logic. All metrics prefixed with `ble_sensor_` and labeled with `device="<name>"`.
-- **exporter.py**: aiohttp HTTP server with three endpoints: `/metrics` (Prometheus scrape), `/healthz` (200 OK), `/status` (JSON with scan stats).
-- **main.py**: Application entrypoint. Wires together: config load → scanner → parser → metrics update loop → HTTP server.
+- **exporter.py**: aiohttp HTTP server with dashboard (`/`), `/metrics` (Prometheus scrape), `/healthz` (200 OK), `/status` (JSON with scan stats). Dashboard shows lock icon for encrypted devices.
+- **main.py**: Application entrypoint. Wires together: config load → scanner → decrypt (if bindkey) → parser → metrics update loop → HTTP server.
 
 ### Data Flow
 1. Scanner runs every `scan_interval_seconds` for `scan_duration_seconds`
 2. Raw BLE advertisements filtered to known devices (from config.yaml `devices` map)
-3. BTHome packets parsed into temperature/humidity/battery values
-4. Prometheus metrics updated with device name labels
-5. HTTP `/metrics` endpoint serves latest values to Prometheus scraper
+3. Encrypted frames decrypted with device bindkey (AES-CCM, if configured)
+4. BTHome packets parsed into temperature/humidity/battery values
+5. Prometheus metrics updated with device name labels
+6. HTTP `/metrics` endpoint serves latest values to Prometheus scraper
 
 ### Key Design Decisions
 - **Only emit metrics from latest scan**: If a device is not seen in current scan, no metrics exported for it
@@ -79,12 +80,16 @@ scan_duration_seconds: 5       # How long each scan runs
 log_file: "./logs/ble_exporter.log"
 listen_port: 8183
 devices:
-  "A4:C1:38:XX:XX:XX": "living_room"  # MAC -> friendly name mapping
+  "A4:C1:38:XX:XX:XX": "living_room"  # Unencrypted: MAC -> friendly name
+  "A4:C1:38:YY:YY:YY":               # Encrypted: MAC -> config with bindkey
+    name: "bedroom"
+    bindkey: "231d39c1d7cc1ab1aee224cd096db932"
 ```
 
 ## Dependencies
 
 - **bleak**: BLE scanning on Linux/Windows/macOS
+- **cryptography**: AES-CCM decryption for encrypted BTHome v2 advertisements
 - **prometheus_client**: Metric registry and `/metrics` endpoint generation
 - **PyYAML**: Config file parsing
 - **aiohttp**: Async HTTP server for endpoints
