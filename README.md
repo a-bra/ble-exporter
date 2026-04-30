@@ -5,6 +5,8 @@ A Python application that passively listens for BLE advertisements from Xiaomi L
 ## Features
 
 - **Passive BLE scanning** - No active connections to devices
+- **BTHome v2 decryption** - AES-CCM decryption for encrypted advertisements with per-device bindkeys
+- **Web dashboard** - Live sensor readings at `/` with auto-refresh and mobile layout
 - **Prometheus metrics** - Standard `/metrics` endpoint for scraping
 - **Multiple endpoints** - `/healthz` for health checks, `/status` for scan metadata
 - **Systemd integration** - Production-ready service management
@@ -14,42 +16,40 @@ A Python application that passively listens for BLE advertisements from Xiaomi L
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         BLE Exporter                             │
-├─────────────────────────────────────────────────────────────────┤
+┌──────────────────────────────────────────────────────────────────┐
+│                          BLE Exporter                            │
+├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  ┌──────────────┐    ┌──────────────┐    ┌─────────────────┐   │
-│  │   Scanner    │───▶│    Parser    │───▶│     Metrics     │   │
-│  │  (BLE/Mock)  │    │   (BTHome)   │    │  (Prometheus)   │   │
-│  └──────────────┘    └──────────────┘    └─────────────────┘   │
-│         │                                          │             │
-│         │                                          │             │
-│         ▼                                          ▼             │
-│  ┌──────────────┐                         ┌─────────────────┐   │
-│  │    Logger    │                         │  HTTP Server    │   │
-│  │  (rotating)  │                         │   (aiohttp)     │   │
-│  └──────────────┘                         └─────────────────┘   │
-│                                                   │              │
-│                                            ┌──────┴──────┐       │
-│                                            │             │       │
-│                                            ▼             ▼       │
-│                                      /metrics      /healthz      │
-│                                      /status                     │
-└─────────────────────────────────────────────────────────────────┘
+│   ┌──────────────┐  ┌──────────────┐  ┌────────┐  ┌──────────┐   │
+│   │   Scanner    │─▶│  Decryptor   │─▶│ Parser │─▶│ Metrics  │   │
+│   │  (BLE/Mock)  │  │  (AES-CCM)   │  │(BTHome)│  │(Prometh.)│   │
+│   └──────────────┘  └──────────────┘  └────────┘  └──────────┘   │
+│          │                                             │         │
+│          ▼                                             ▼         │
+│   ┌──────────────┐                         ┌─────────────────┐   │
+│   │    Logger    │                         │  HTTP Server    │   │
+│   │  (rotating)  │                         │   (aiohttp)     │   │
+│   └──────────────┘                         └─────────────────┘   │
+│                                              │    │    │    │    │
+│                                              ▼    ▼    ▼    ▼    │
+│                                              /      /metrics     │
+│                                               /healthz   /status │
+└──────────────────────────────────────────────────────────────────┘
         ▲                                           │
-        │                                           │
+        │                                           ▼
    BLE Devices                              Prometheus Scraper
-  (Thermometers)                              (HTTP Client)
+  (Thermometers)                             / Web Browser
 ```
 
 ### Data Flow
 
 1. **Scanner** polls for BLE advertisements every N seconds
-2. **Parser** decodes BTHome packets (temperature, humidity, battery)
-3. **Metrics** updates Prometheus gauges with device labels
-4. **HTTP Server** exposes metrics on `/metrics` for Prometheus
-5. **Logger** records all scan events and errors to rotating log files
-6. **Status Tracker** maintains scan metadata for `/status` endpoint
+2. **Decryptor** decrypts encrypted BTHome v2 frames using per-device bindkeys (if configured)
+3. **Parser** decodes BTHome packets (temperature, humidity, battery)
+4. **Metrics** updates Prometheus gauges with device labels
+5. **HTTP Server** serves dashboard (`/`), metrics, health, and status endpoints
+6. **Logger** records all scan events and errors to rotating log files
+7. **Status Tracker** maintains scan metadata for `/status` endpoint
 
 ## Requirements
 
@@ -95,8 +95,14 @@ Update the `devices` section with your BLE sensor MAC addresses:
 
 ```yaml
 devices:
+  # Unencrypted device: MAC -> friendly name
   "A4:C1:38:11:22:33": "living_room"
   "A4:C1:38:44:55:66": "bedroom"
+
+  # Encrypted device: MAC -> name + bindkey
+  "A4:C1:38:77:88:99":
+    name: "office"
+    bindkey: "231d39c1d7cc1ab1aee224cd096db932"
 ```
 
 ### 4. Test the application
@@ -183,6 +189,10 @@ sudo systemctl reload prometheus
 
 ## API Endpoints
 
+### GET /
+
+Web dashboard showing latest sensor readings per device. Auto-refreshes every 60 seconds. Encrypted devices display a lock icon. Responsive mobile layout.
+
 ### GET /healthz
 
 Health check endpoint.
@@ -236,12 +246,12 @@ python -m ble_exporter.main --config config.yaml --mock-scanner
 ```
 ble_exporter/
        __init__.py
-       config.py          # YAML config parser
+       config.py          # YAML config parser with DeviceConfig (plain + encrypted)
        logger.py          # File-based logging setup
-       parser.py          # BTHome packet decoder
+       parser.py          # BTHome packet decoder and AES-CCM decryptor
        scanner.py         # BLE scanning abstraction
        metrics.py         # Prometheus metrics registry
-       exporter.py        # HTTP server (aiohttp)
+       exporter.py        # HTTP server with dashboard (aiohttp)
        diagnostics.py     # Diagnostic tool for troubleshooting sensors
        main.py            # Application entrypoint
 ```
